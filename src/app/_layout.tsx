@@ -1,15 +1,129 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import { useColorScheme } from 'react-native';
+import React, { useEffect, useState } from "react";
+import { Stack, useRouter } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { useFonts } from "expo-font";
+import { ActivityIndicator, View } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+// Provider & Data Layer Imports
+import { Provider } from "react-redux";
+import { store } from "@/api/store";
+import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
+import { getAuthToken } from "@/api/secureStore";
+import { SocketProvider } from "@/contexts/socket";
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+SplashScreen.preventAutoHideAsync();
+
+export default function RootLayout() {
+  const [loaded, error] = useFonts({
+    "RethinkSans-Regular": require("../../assets/fonts/RethinkSans-Regular.ttf"),
+    "RethinkSans-Medium": require("../../assets/fonts/RethinkSans-Medium.ttf"),
+    "RethinkSans-Bold": require("../../assets/fonts/RethinkSans-Bold.ttf"),
+  });
+
+  console.log("🔤 Font loading status → Loaded:", loaded, "Error:", !!error);
+
+  useEffect(() => {
+    if (loaded || error) {
+      console.log("🎨 Fonts loaded or error occurred. Hiding splash screen...");
+      SplashScreen.hideAsync();
+    }
+  }, [loaded, error]);
+
+  if (!loaded && !error) {
+    console.log("⏳ Fonts still loading, showing null (splash screen active)");
+    return null;
+  }
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <Provider store={store}>
+      <ThemeProvider>
+        <SocketProvider>
+          <SafeAreaProvider>
+            <RootLayoutInitializer />
+          </SafeAreaProvider>
+        </SocketProvider>
+      </ThemeProvider>
+    </Provider>
+  );
+}
+
+function RootLayoutInitializer() {
+  const router = useRouter();
+  const { theme } = useTheme();
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  console.log("🚀 RootLayoutInitializer mounted");
+
+  useEffect(() => {
+    async function checkAuthenticationLifecycle() {
+      console.log("🔍 Starting authentication check...");
+
+      try {
+        const token = await getAuthToken();
+        console.log(
+          "🔑 Auth token check result:",
+          token ? "✅ Token found" : "❌ No token"
+        );
+
+        if (token) {
+          console.log("✅ User is authenticated → Redirecting to Home");
+          router.replace("/(tabs)/home");
+        } else {
+          console.log("❌ No token found → Redirecting to Onboarding");
+          router.replace("/(auth)/Onboarding");
+        }
+      } catch (err) {
+        console.error("❌ Error during auth check:", err);
+        console.log("🔄 Falling back to Onboarding screen");
+        router.replace("/(auth)/Onboarding");
+      } finally {
+        console.log(
+          "🏁 Authentication check completed. Setting isInitializing to false"
+        );
+        setIsInitializing(false);
+      }
+    }
+
+    checkAuthenticationLifecycle();
+  }, []);
+
+  // Initialization State (Loading)
+  if (isInitializing) {
+    console.log("⏳ Showing loading screen (authentication check in progress)");
+    return (
+      <SafeAreaView
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: theme.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={theme.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  console.log("✅ Initialization complete. Rendering main navigation stack");
+
+  // Main Navigation Stack
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)/Onboarding" />
+        <Stack.Screen name="(auth)/sign-in" />
+        <Stack.Screen name="(auth)/otp" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(screens)/notifications" />
+        <Stack.Screen name="(screens)/order" />
+        <Stack.Screen name="(screens)/profile" />
+        <Stack.Screen name="(screens)/settings" />
+        <Stack.Screen name="(screens)/support" />
+        <Stack.Screen name="(screens)/wallet" />
+        <Stack.Screen name="(screens)/withdrawal" />
+      </Stack>
+    </View>
   );
 }

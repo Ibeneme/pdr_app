@@ -1,0 +1,24 @@
+import { configureStore } from '@reduxjs/toolkit';
+import authReducer from './slices/auth.slice';
+import userSlice from './slices/user.slice';
+import parcelSlice from './slices/parcel.slice';
+import rideSlice from './slices/ride.slice';
+import negotiationSlice from './slices/negotiation.slice';
+import paymentSlice from './slices/payment.slice';
+
+export const store = configureStore({
+    reducer: {
+        auth: authReducer,
+        user: userSlice,
+        parcel: parcelSlice,
+        ride: rideSlice,
+        negotiation: negotiationSlice,
+        payment: paymentSlice,
+    },
+});
+
+// Export these hooks so you can use them in your components
+// Instead of importing the raw useDispatch/useSelector, 
+// you will use these typed versions.
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
