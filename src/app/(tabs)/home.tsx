@@ -14,44 +14,75 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { AppText } from "@/components/AppText";
 import { Bell, LayoutDashboard } from "lucide-react-native";
 import SidebarDrawer from "@/components/SidebarDrawer";
+import Constants from "expo-constants";
 
 // Redux
 import { useDispatch, useSelector } from "react-redux";
 import * as Notifications from "expo-notifications";
 import { AppDispatch, RootState } from "@/api/store";
 import { getProfile, savePushToken } from "@/api/slices/user.slice";
+import { fetchNotifications } from "@/api/slices/notification.slice";
 
 export default function HomeScreen() {
   const { theme: colors, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
 
-  const { profile, isLoading, error } = useSelector(
-    (state: RootState) => state.user
-  );
+  // Profile Selector
+  const {
+    profile,
+    isLoading: isUserLoading,
+    error: userError,
+  } = useSelector((state: RootState) => state.user);
+
+  // Notification Selector
+  const {
+    unreadCount,
+    isLoading: isNotifLoading,
+    error: notifError,
+  } = useSelector((state: RootState) => state.notification);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(3);
 
-  // Fetch profile + register Expo Push Token
+  // Fallbacks & Dynamic Analytics Calculation
+  // const ongoingOrdersCount = profile?.ongoingOrders?.length || 0;
+  // const estimatedArrival = profile?.estimatedArrival || "~30 mins";
+
+  // Fetch profiles, notifications, and register push token safely
   useEffect(() => {
     const initializeUser = async () => {
       try {
-        // 1. Fetch user profile (gets ID + saves to secure store)
+        // 1. Core Profile Sync
         await dispatch(getProfile()).unwrap();
 
-        // 2. Get Expo Push Token and send to backend
-        const token = await Notifications.getExpoPushTokenAsync();
+        // 2. Notifications Pull
+        await dispatch(fetchNotifications()).unwrap();
+
+        // 3. Resolve Project Identifier from app manifest config dynamically
+        const projectId =
+          Constants.expoConfig?.extra?.eas?.projectId ||
+          Constants.manifest2?.extra?.eas?.projectId;
+
+        if (!projectId) {
+          console.warn(
+            "⚠️ [PUSH NOTIFICATION] Missing projectId configuration in your app manifest mapping."
+          );
+          return;
+        }
+
+        // 4. Secure Push registration pipeline
+        const token = await Notifications.getExpoPushTokenAsync({ projectId });
 
         if (token?.data) {
           console.log("Expo Push Token:", token.data);
           await dispatch(savePushToken({ expoPushToken: token.data })).unwrap();
         }
       } catch (err: any) {
-        console.error("Failed to initialize user data:", err);
+        console.error("Failed to initialize system parameters:", err);
         Alert.alert(
-          "Error",
-          err?.message || "Failed to load profile or push token"
+          "Initialization Error",
+          err?.message ||
+            "Failed to establish environment settings or profile pipelines."
         );
       }
     };
@@ -62,7 +93,7 @@ export default function HomeScreen() {
   const handleAction = (actionType: string) => {
     switch (actionType) {
       case "REQUEST_DELIVERY":
-        router.push("/(features)/drivers_menu");
+        router.push("/(features)/book_parcel");
         break;
       case "SEND_PARCEL":
         router.push("/(features)/send_parcel");
@@ -142,7 +173,6 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             onPress={() => {
-              setNotificationCount(0);
               router.push("/(screens)/notifications");
             }}
             style={[
@@ -155,12 +185,12 @@ export default function HomeScreen() {
             activeOpacity={0.7}
           >
             <Bell color={colors.text} size={22} />
-            {notificationCount > 0 && (
+            {unreadCount > 0 && (
               <View
                 style={[styles.notiBadge, { backgroundColor: colors.primary }]}
               >
                 <AppText size={9} weight="bold" color="#FFF">
-                  {notificationCount}
+                  {unreadCount > 99 ? "99+" : unreadCount}
                 </AppText>
               </View>
             )}
@@ -168,16 +198,20 @@ export default function HomeScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Loading Indicator */}
-      {isLoading && (
-        <View style={{ padding: 20 }}>
-          <AppText>Loading profile...</AppText>
+      {/* System State Handlers */}
+      {(isUserLoading || isNotifLoading) && (
+        <View style={styles.infoMessageWrapper}>
+          <AppText size={13} color={colors.textMuted}>
+            Updating synchronization status...
+          </AppText>
         </View>
       )}
 
-      {error && (
-        <View style={{ padding: 20 }}>
-          <AppText color="red">Error: {error}</AppText>
+      {(userError || notifError) && (
+        <View style={styles.infoMessageWrapper}>
+          <AppText size={13} color="red">
+            Error handling system synchronization context.
+          </AppText>
         </View>
       )}
 
@@ -204,8 +238,8 @@ export default function HomeScreen() {
           </AppText>
         </View>
 
-        {/* Rest of your original content unchanged */}
-        <TouchableOpacity
+        {/* --- DYNAMIC DASHBOARD ANALYTICS FRAME --- */}
+        {/* <TouchableOpacity
           style={[
             styles.dashboardCardFrame,
             { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -216,35 +250,29 @@ export default function HomeScreen() {
           <View style={styles.dashboardCardLeft}>
             <View style={styles.textBadgeOverlay}>
               <AppText size={10} weight="bold" color="#FFF">
-                ACTIVE
+                {ongoingOrdersCount > 0 ? "ACTIVE" : "STABLE"}
               </AppText>
             </View>
             <View style={styles.dashboardTextContainer}>
               <AppText size={15} weight="bold" color="#FFF">
-                2 ONGOING ORDERS
+                {ongoingOrdersCount} ONGOING{" "}
+                {ongoingOrdersCount === 1 ? "ORDER" : "ORDERS"}
               </AppText>
               <AppText
                 size={14}
                 color="rgba(255,255,255,0.8)"
                 style={{ marginTop: 2 }}
               >
-                Estimated runtime arrival: ~30 mins
+                {ongoingOrdersCount > 0
+                  ? `Estimated runtime arrival: ${estimatedArrival}`
+                  : "No operational freight items currently routing."}
               </AppText>
             </View>
           </View>
           <AppText size={11} weight="bold" color="#FFF">
             VIEW
           </AppText>
-        </TouchableOpacity>
-
-        <AppText
-          size={11}
-          weight="bold"
-          color={colors.textMuted}
-          style={styles.sectionTitle}
-        >
-          PARCEL FREIGHT LOGISTICS
-        </AppText>
+        </TouchableOpacity> */}
 
         <View style={styles.gridContainer}>
           <TouchableOpacity
@@ -327,15 +355,6 @@ export default function HomeScreen() {
             </View>
           </TouchableOpacity>
         </View>
-
-        <AppText
-          size={11}
-          weight="bold"
-          color={colors.textMuted}
-          style={styles.sectionTitle}
-        >
-          COMMUTE NETWORK SYSTEM
-        </AppText>
 
         <View style={styles.gridContainer}>
           <TouchableOpacity
@@ -429,7 +448,6 @@ export default function HomeScreen() {
   );
 }
 
-// Styles remain exactly the same
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerSafeArea: {
@@ -468,6 +486,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 4,
   },
+  infoMessageWrapper: {
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
   mainScrollContainer: { flex: 1 },
   scrollContentLayout: {
     paddingTop: 32,
@@ -475,7 +498,6 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === "ios" ? 40 : 24,
   },
   welcomeBanner: { marginBottom: 24 },
-  greetingText: { letterSpacing: 0.8, marginBottom: 6 },
   dashboardCardFrame: {
     flexDirection: "row",
     alignItems: "center",
@@ -485,7 +507,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     marginBottom: 28,
   },
-  dashboardCardLeft: { flexDirection: "row", alignItems: "center" },
+  dashboardCardLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    paddingRight: 8,
+  },
   textBadgeOverlay: {
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -493,7 +520,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.2)",
     marginRight: 12,
   },
-  dashboardTextContainer: { justifyContent: "center" },
+  dashboardTextContainer: { justifyContent: "center", flex: 1 },
   sectionTitle: { letterSpacing: 1.0, marginBottom: 12, paddingLeft: 2 },
   gridContainer: {
     flexDirection: "row",

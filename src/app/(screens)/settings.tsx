@@ -9,34 +9,38 @@ import {
   Switch,
   Platform,
   StatusBar,
+  Linking, // 1. Import Linking
 } from "react-native";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   ArrowLeft,
-  User,
-  Bell,
   Shield,
-  Globe,
   Moon,
   Sun,
   HelpCircle,
   Info,
-  LogOut,
   ChevronRight,
 } from "lucide-react-native";
 import { router } from "expo-router";
 
 export default function SettingsScreen() {
   const { theme, isDark, setMode } = useTheme();
-
-  const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
-  const [locationEnabled, setLocationEnabled] = React.useState(true);
   const [darkMode, setDarkMode] = React.useState(isDark);
 
   const toggleDarkMode = () => {
     const newMode = !darkMode;
     setDarkMode(newMode);
     setMode(newMode ? "dark" : "light");
+  };
+
+  // 2. Add the URL handler function
+  const handleOpenLink = async (url: string) => {
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      console.error(`Don't know how to open this URL: ${url}`);
+    }
   };
 
   return (
@@ -91,23 +95,6 @@ export default function SettingsScreen() {
         >
           <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7}>
             <View style={styles.iconWrapper}>
-              <User size={22} color={theme.textMuted} />
-            </View>
-            <View style={styles.settingsTextContainer}>
-              <Text style={[styles.settingsLabel, { color: theme.text }]}>
-                Edit Profile
-              </Text>
-              <Text
-                style={[styles.settingsSubtext, { color: theme.textMuted }]}
-              >
-                Update your personal information
-              </Text>
-            </View>
-            <ChevronRight size={20} color={theme.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7}>
-            <View style={styles.iconWrapper}>
               <Shield size={22} color={theme.textMuted} />
             </View>
             <View style={styles.settingsTextContainer}>
@@ -160,45 +147,6 @@ export default function SettingsScreen() {
               thumbColor={darkMode ? theme.primary : "#f4f3f4"}
             />
           </View>
-
-          <View style={styles.settingsRow}>
-            <View style={styles.iconWrapper}>
-              <Bell size={22} color={theme.textMuted} />
-            </View>
-            <View style={styles.settingsTextContainer}>
-              <Text style={[styles.settingsLabel, { color: theme.text }]}>
-                Push Notifications
-              </Text>
-              <Text
-                style={[styles.settingsSubtext, { color: theme.textMuted }]}
-              >
-                Ride requests and updates
-              </Text>
-            </View>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
-              trackColor={{ false: "#767577", true: theme.primary + "80" }}
-              thumbColor={notificationsEnabled ? theme.primary : "#f4f3f4"}
-            />
-          </View>
-
-          <View style={styles.settingsRow}>
-            <View style={styles.iconWrapper}>
-              <Globe size={22} color={theme.textMuted} />
-            </View>
-            <View style={styles.settingsTextContainer}>
-              <Text style={[styles.settingsLabel, { color: theme.text }]}>
-                Language
-              </Text>
-              <Text
-                style={[styles.settingsSubtext, { color: theme.textMuted }]}
-              >
-                English (Nigeria)
-              </Text>
-            </View>
-            <ChevronRight size={20} color={theme.textMuted} />
-          </View>
         </View>
 
         {/* Support & Info */}
@@ -212,7 +160,12 @@ export default function SettingsScreen() {
             { backgroundColor: theme.surface, borderColor: theme.border },
           ]}
         >
-          <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7}>
+          {/* 3. Updated Help Center Click */}
+          <TouchableOpacity
+            style={styles.settingsRow}
+            activeOpacity={0.7}
+            onPress={() => handleOpenLink("https://www.padimanroute.com")}
+          >
             <View style={styles.iconWrapper}>
               <HelpCircle size={22} color={theme.textMuted} />
             </View>
@@ -224,7 +177,12 @@ export default function SettingsScreen() {
             <ChevronRight size={20} color={theme.textMuted} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7}>
+          {/* 4. Updated About/Policy Click */}
+          <TouchableOpacity
+            style={styles.settingsRow}
+            activeOpacity={0.7}
+            onPress={() => handleOpenLink("https://www.padimanroute.com")}
+          >
             <View style={styles.iconWrapper}>
               <Info size={22} color={theme.textMuted} />
             </View>
@@ -241,15 +199,6 @@ export default function SettingsScreen() {
             <ChevronRight size={20} color={theme.textMuted} />
           </TouchableOpacity>
         </View>
-
-        {/* Logout */}
-        <TouchableOpacity
-          style={[styles.logoutButton, { backgroundColor: "#FF3B3010" }]}
-          activeOpacity={0.8}
-        >
-          <LogOut size={22} color="#FF3B30" />
-          <Text style={styles.logoutText}>Sign Out</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -326,19 +275,5 @@ const styles = StyleSheet.create({
     fontFamily: "RethinkSans-Regular",
     fontSize: 13,
     marginTop: 2,
-  },
-  logoutButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    height: 58,
-    borderRadius: 18,
-    gap: 12,
-    marginTop: 8,
-  },
-  logoutText: {
-    fontFamily: "RethinkSans-Bold",
-    color: "#FF3B30",
-    fontSize: 16,
   },
 });

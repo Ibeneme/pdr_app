@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -10,70 +10,257 @@ import {
   Modal,
   TextInput,
   Dimensions,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { WebView } from "react-native-webview";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { AppText } from "@/components/AppText";
+
+import { useDispatch, useSelector } from "react-redux";
+import {
+  fetchWallet,
+  initializeFunding,
+  verifyAndTopUp,
+} from "@/api/slices/wallet.slice";
+import { getUser } from "@/api/secureStore";
+import { AppDispatch } from "@/api/store";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function WalletScreen() {
   const { theme: colors, isDark } = useTheme();
   const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
 
-  const [balance] = useState(48750);
-  const [selectedTx, setSelectedTx] = useState<any | null>(null);
+  // Redux State
+  const { balance, earnings, withdrawals, isLoading } = useSelector(
+    (state: any) => state.wallet
+  );
+
+  // Local State
+  const [selectedTx, setSelectedTx] = useState<any>(null);
   const [fundModalVisible, setFundModalVisible] = useState(false);
   const [fundAmount, setFundAmount] = useState("");
 
-  const transactions = [
-    {
-      id: "TX-90182",
-      type: "credit",
-      title: "Ride Revenue Received",
-      amount: "+₦3,800",
-      date: "Today, 11:20 AM",
-      service: "Ride Sharing",
-      route: "Choba to Aluu",
-      driver: "Emma Okoro",
-      status: "Settled",
-    },
-    {
-      id: "TX-44129",
-      type: "debit",
-      title: "Settlement to GTBank",
-      amount: "-₦15,000",
-      date: "May 23, 2026",
-      service: "Bank Withdrawal",
-      route: "Not Applicable",
-      driver: "David Bike Run",
-      status: "Processed",
-    },
-    {
-      id: "TX-11028",
-      type: "credit",
-      title: "Logistics Delivery Payout",
-      amount: "+₦2,500",
-      date: "May 22, 2026",
-      service: "Parcel Delivery",
-      route: "Port Harcourt to Owerri",
-      driver: "David Bike Run",
-      status: "Settled",
-    },
-    {
-      id: "TX-09821",
-      type: "credit",
-      title: "Ride Revenue Received",
-      amount: "+₦1,800",
-      date: "May 21, 2026",
-      service: "Ride Sharing",
-      route: "Choba to Rumuokwuta",
-      driver: "Sarah Nwosu",
-      status: "Settled",
-    },
-  ];
+  // Paystack WebView Flow Local States
+  const [paystackUrl, setPaystackUrl] = useState<string | null>(null);
+  const [webViewModalVisible, setWebViewModalVisible] = useState(false);
+  const [activeReference, setActiveReference] = useState<string | null>(null);
 
+  console.warn(balance, earnings, withdrawals, isLoading);
   const quickAmounts = [1000, 5000, 10000, 25000];
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log(
+        "[UI_FOCUS_LIFECYCLE] 🔄 Wallet screen has come into view. Fetching updated ledger stats..."
+      );
+
+      dispatch(fetchWallet())
+        .unwrap()
+        .then((data) => {
+          console.log(
+            "[UI_FOCUS_SUCCESS] ✅ Wallet data updated successfully:",
+            data
+          );
+        })
+        .catch((error) => {
+          console.error(
+            "[UI_FOCUS_ERROR] ❌ Failed to fetch wallet data:",
+            error
+          );
+        });
+    }, [dispatch])
+  );
+
+  const handleWebViewNavigationStateChange = async (navState: any) => {
+    const { url } = navState;
+    console.log("[PAYSTACK_NAVIGATION_INTERCEPTOR] URL Event Trace Log:", url);
+
+    const isSuccessRedirect =
+      url.includes("callback") ||
+      url.includes("checkout/done") ||
+      url.includes("trx_reference=") ||
+      url.includes("reference=");
+
+    if (isSuccessRedirect) {
+      triggerVerificationSequence();
+    } else if (url.includes("paystack.com/close")) {
+      handlePaymentCancellation();
+    }
+  };
+
+  const handleWebViewMessage = async (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (
+        data.event === "charge:success" ||
+        data.message === "Approved" ||
+        data.status === "success"
+      ) {
+        triggerVerificationSequence();
+      }
+    } catch (err) {}
+  };
+
+  const triggerVerificationSequence = async () => {
+    setWebViewModalVisible(false);
+    setPaystackUrl(null);
+
+    if (activeReference) {
+      try {
+        await dispatch(verifyAndTopUp(activeReference)).unwrap();
+        dispatch(fetchWallet());
+        Alert.alert(
+          "Funding Successful",
+          `Successfully topped up your wallet!`
+        );
+        setFundAmount("");
+        setActiveReference(null);
+      } catch (verificationError: any) {
+        Alert.alert(
+          "Verification Check Incomplete",
+          verificationError || "Please contact support if funds were deducted."
+        );
+      }
+    } else {
+      dispatch(fetchWallet());
+    }
+  };
+
+  const handlePaymentCancellation = () => {
+    setWebViewModalVisible(false);
+    setPaystackUrl(null);
+    setActiveReference(null);
+    dispatch(fetchWallet());
+    Alert.alert(
+      "Payment Cancelled",
+      "You closed the secure billing session checkout screen."
+    );
+  };
+
+  const handleFundAccount = async () => {
+    const amount = parseInt(fundAmount);
+    if (!amount || amount < 100) {
+      Alert.alert("Invalid Amount", "Minimum funding amount is ₦100");
+      return;
+    }
+
+    try {
+      const user = await getUser();
+      const email = user?.email;
+
+      if (!email) {
+        Alert.alert("Error", "User email not found. Please log in again.");
+        return;
+      }
+
+      const result = await dispatch(
+        initializeFunding({ amount: Number(fundAmount), email })
+      ).unwrap();
+
+      if (result.authorization_url) {
+        setActiveReference(result.reference);
+        setFundModalVisible(false);
+        setPaystackUrl(result.authorization_url);
+        setWebViewModalVisible(true);
+      } else {
+        Alert.alert(
+          "Error",
+          "Initialization failed to pass gateway parameters token headers safely."
+        );
+      }
+    } catch (err: any) {
+      Alert.alert("Funding Failed", err || "Please try again later");
+    }
+  };
+
+  // NEW: Dynamic Order Details Routing Action
+  const handleViewOrderDetails = (tx: any) => {
+    setSelectedTx(null); // Dismiss modal summary window frame
+
+    const serviceId = tx.raw?.serviceId;
+    const source = tx.raw?.source;
+
+    if (!serviceId) {
+      Alert.alert(
+        "Notice",
+        "This older transaction has no linked service item profile history associated with it."
+      );
+      return;
+    }
+
+    // A. Route to Deliver a Parcel Screen Context
+    if (source === "deliver_a_parcel") {
+      return router.push({
+        pathname: "/(details)/details",
+        params: { id: serviceId },
+      });
+    }
+
+    // B. Route to Ride Offer / Ride Join Screen Context
+    if (source === "ride_offer" || source === "ride_join") {
+      return router.push({
+        pathname: "/(details)/ride",
+        params: {
+          id: serviceId,
+          driverName: tx.raw?.payerName || "Driver",
+          pickup: "View Details",
+          dropoff: "View Details",
+          fare: tx.raw?.amount || "",
+          seats: 1,
+        },
+      });
+    }
+  };
+
+  // Combine earnings and withdrawals into unified transaction list
+  const transactions = [
+    ...earnings.map((e: any) => ({
+      id: e.reference || e._id,
+      type: "credit",
+      title:
+        e.source === "deliver_a_parcel"
+          ? "Parcel Revenue Received"
+          : e.source || "Ride Revenue Received",
+      amount: `+₦${e.amount.toLocaleString()}`,
+      date: new Date(e.createdAt).toLocaleDateString("en-NG", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      service: e.source || "Ride Sharing",
+      route:
+        e.source === "deliver_a_parcel"
+          ? "Delivery Order Log"
+          : "Ride Sharing Journey",
+      driver: e.payerName || "System",
+      status: "Settled",
+      raw: e,
+    })),
+    ...withdrawals.map((w: any) => ({
+      id: w.reference || w._id,
+      type: "debit",
+      title: "Bank Withdrawal",
+      amount: `-₦${w.amount.toLocaleString()}`,
+      date: new Date(w.createdAt).toLocaleDateString("en-NG", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      service: "Bank Transfer",
+      route: "Not Applicable",
+      driver: w.bankDetails?.accountName || "N/A",
+      status: w.status === "success" ? "Processed" : w.status.toUpperCase(),
+      raw: w,
+    })),
+  ].sort(
+    (a, b) =>
+      new Date(b.raw.createdAt).getTime() - new Date(a.raw.createdAt).getTime()
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -106,7 +293,7 @@ export default function WalletScreen() {
             </AppText>
           </TouchableOpacity>
           <AppText size={18} weight="bold" color={colors.text}>
-            Financial Ledger
+            Wallet
           </AppText>
           <View style={{ width: 44 }} />
         </View>
@@ -130,7 +317,7 @@ export default function WalletScreen() {
             color={colors.textMuted}
             style={{ letterSpacing: 0.8 }}
           >
-            WALLET
+            WALLET AVAILABLE BALANCE
           </AppText>
           <AppText
             size={34}
@@ -142,18 +329,6 @@ export default function WalletScreen() {
           </AppText>
 
           <View style={styles.balanceTwinActionsRow}>
-            <TouchableOpacity
-              style={[
-                styles.actionCellBtn,
-                { backgroundColor: colors.primary },
-              ]}
-              onPress={() => setFundModalVisible(true)}
-            >
-              <AppText size={14} weight="bold" color="#FFF">
-                Fund Account
-              </AppText>
-            </TouchableOpacity>
-
             <TouchableOpacity
               style={[
                 styles.actionCellBtn,
@@ -172,46 +347,6 @@ export default function WalletScreen() {
           </View>
         </View>
 
-        {/* --- STATS ASYMMETRIC GRID TRACKER --- */}
-        <View style={styles.statsRowGridLayout}>
-          <View
-            style={[
-              styles.smallMetricCardBox,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <AppText
-              size={11}
-              weight="bold"
-              color={colors.textMuted}
-              style={{ marginBottom: 4 }}
-            >
-              CUMULATIVE EARNINGS
-            </AppText>
-            <AppText size={20} weight="bold" color={colors.text}>
-              ₦128,450
-            </AppText>
-          </View>
-          <View
-            style={[
-              styles.smallMetricCardBox,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <AppText
-              size={11}
-              weight="bold"
-              color={colors.textMuted}
-              style={{ marginBottom: 4 }}
-            >
-              CURRENT CYCLE MONTH
-            </AppText>
-            <AppText size={20} weight="bold" color={colors.text}>
-              ₦42,300
-            </AppText>
-          </View>
-        </View>
-
         {/* --- RECENT TRANSACTION STREAMS --- */}
         <View style={styles.sectionTitleLayoutDock}>
           <AppText
@@ -227,76 +362,85 @@ export default function WalletScreen() {
           </AppText>
         </View>
 
-        {transactions.map((tx) => {
-          const isIncome = tx.type === "credit";
-          return (
-            <TouchableOpacity
-              key={tx.id}
-              style={[
-                styles.transactionLogCardRow,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
-              onPress={() => setSelectedTx(tx)}
-              activeOpacity={0.9}
-            >
-              <View style={styles.txLogInternalStructure}>
-                <View
-                  style={[
-                    styles.verticalIndicatorPillMarker,
-                    { backgroundColor: isIncome ? "#22C55E" : "#EF4444" },
-                  ]}
-                />
-
-                <View style={{ flex: 1, paddingLeft: 4 }}>
-                  <AppText
-                    size={14}
-                    weight="bold"
-                    color={colors.text}
-                    numberOfLines={1}
-                  >
-                    {tx.title}
-                  </AppText>
-                  <AppText
-                    size={12}
-                    weight="medium"
-                    color={colors.textMuted}
-                    style={{ marginVertical: 2 }}
-                  >
-                    {tx.route}
-                  </AppText>
-                  <AppText size={11} color={colors.textMuted}>
-                    ID: {tx.id} • {tx.date}
-                  </AppText>
-                </View>
-
-                <View
-                  style={{ alignItems: "flex-end", justifyContent: "center" }}
-                >
-                  <AppText
-                    size={15}
-                    weight="bold"
-                    color={isIncome ? "#22C55E" : "#EF4444"}
-                  >
-                    {tx.amount}
-                  </AppText>
+        {isLoading && transactions.length === 0 ? (
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+            style={{ marginTop: 50 }}
+          />
+        ) : (
+          transactions.map((tx) => {
+            const isIncome = tx.type === "credit";
+            return (
+              <TouchableOpacity
+                key={tx.id}
+                style={[
+                  styles.transactionLogCardRow,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={() => setSelectedTx(tx)}
+                activeOpacity={0.9}
+              >
+                <View style={styles.txLogInternalStructure}>
                   <View
                     style={[
-                      styles.statusMiniCapsule,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                      },
+                      styles.verticalIndicatorPillMarker,
+                      { backgroundColor: isIncome ? "#22C55E" : "#EF4444" },
                     ]}
-                  >
-                    <AppText size={9} weight="bold" color={colors.text}>
-                      {tx.status.toUpperCase()}
+                  />
+                  <View style={{ flex: 1, paddingLeft: 12 }}>
+                    <AppText
+                      size={14}
+                      weight="bold"
+                      color={colors.text}
+                      numberOfLines={1}
+                    >
+                      {tx.title}
+                    </AppText>
+                    <AppText
+                      size={12}
+                      weight="medium"
+                      color={colors.textMuted}
+                      style={{ marginVertical: 2 }}
+                    >
+                      {tx.route}
+                    </AppText>
+                    <AppText size={11} color={colors.textMuted}>
+                      {tx.date}
                     </AppText>
                   </View>
+                  <View
+                    style={{ alignItems: "flex-end", justifyContent: "center" }}
+                  >
+                    <AppText
+                      size={15}
+                      weight="bold"
+                      color={isIncome ? "#22C55E" : "#EF4444"}
+                    >
+                      {tx.amount}
+                    </AppText>
+                    <View
+                      style={[
+                        styles.statusMiniCapsule,
+                        {
+                          backgroundColor: colors.background,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <AppText size={9} weight="bold" color={colors.text}>
+                        {tx.status.toUpperCase()}
+                      </AppText>
+                    </View>
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+              </TouchableOpacity>
+            );
+          })
+        )}
       </ScrollView>
 
       {/* ==================== MODAL 1: TRANSACTION LEDGER DETAILS LAYER ==================== */}
@@ -315,7 +459,7 @@ export default function WalletScreen() {
           >
             <View style={styles.modalHeaderActionBarLayout}>
               <AppText size={16} weight="bold" color={colors.text}>
-                Details
+                Transaction Details
               </AppText>
               <TouchableOpacity
                 style={[
@@ -348,7 +492,7 @@ export default function WalletScreen() {
                   ]}
                 >
                   <AppText size={11} weight="bold" color={colors.textMuted}>
-                    TRANSACTION VALUATION VOLUME
+                    TRANSACTION VALUE
                   </AppText>
                   <AppText
                     size={32}
@@ -358,8 +502,13 @@ export default function WalletScreen() {
                   >
                     {selectedTx.amount}
                   </AppText>
-                  <AppText size={11} weight="bold" color={colors.text}>
-                    UUID: {selectedTx.id}
+                  <AppText
+                    size={11}
+                    weight="bold"
+                    color={colors.text}
+                    numberOfLines={1}
+                  >
+                    Ref: {selectedTx.id}
                   </AppText>
                 </View>
 
@@ -371,28 +520,33 @@ export default function WalletScreen() {
                 >
                   <View style={styles.metadataSplitRowAlign}>
                     <AppText size={13} color={colors.textMuted}>
-                      Source
+                      Service Context
                     </AppText>
                     <AppText size={13} weight="bold" color={colors.text}>
                       {selectedTx.service}
                     </AppText>
                   </View>
+
                   <View style={styles.metadataSplitRowAlign}>
                     <AppText size={13} color={colors.textMuted}>
-                      Routing Geolocation
-                    </AppText>
-                    <AppText size={13} weight="bold" color={colors.text}>
-                      {selectedTx.route}
-                    </AppText>
-                  </View>
-                  <View style={styles.metadataSplitRowAlign}>
-                    <AppText size={13} color={colors.textMuted}>
-                      Account Owner
+                      Payer/Beneficiary
                     </AppText>
                     <AppText size={13} weight="bold" color={colors.text}>
                       {selectedTx.driver}
                     </AppText>
                   </View>
+
+                  {selectedTx.raw?.payerEmail && (
+                    <View style={styles.metadataSplitRowAlign}>
+                      <AppText size={13} color={colors.textMuted}>
+                        Payer Email
+                      </AppText>
+                      <AppText size={13} weight="bold" color={colors.text}>
+                        {selectedTx.raw.payerEmail}
+                      </AppText>
+                    </View>
+                  )}
+
                   <View style={styles.metadataSplitRowAlign}>
                     <AppText size={13} color={colors.textMuted}>
                       Timestamp
@@ -401,20 +555,22 @@ export default function WalletScreen() {
                       {selectedTx.date}
                     </AppText>
                   </View>
-                  <View
-                    style={[
-                      styles.metadataSplitRowAlign,
-                      { borderBottomWidth: 0, paddingBottom: 0 },
-                    ]}
-                  >
-                    <AppText size={13} color={colors.textMuted}>
-                      Status
-                    </AppText>
-                    <AppText size={13} weight="bold" color="#22C55E">
-                      {selectedTx.status}
-                    </AppText>
-                  </View>
                 </View>
+
+                {/* ACTION ROUTE BUTTON FOR EARNING ITEMS WITH LINKED SERVICE IDS */}
+                {selectedTx.type === "credit" && selectedTx.raw?.serviceId && (
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryRoutingButton,
+                      { backgroundColor: colors.primary },
+                    ]}
+                    onPress={() => handleViewOrderDetails(selectedTx)}
+                  >
+                    <AppText size={14} weight="bold" color="#FFF">
+                      View Order Details
+                    </AppText>
+                  </TouchableOpacity>
+                )}
               </ScrollView>
             )}
           </View>
@@ -428,7 +584,10 @@ export default function WalletScreen() {
         visible={fundModalVisible}
         onRequestClose={() => setFundModalVisible(false)}
       >
-        <View style={styles.modalScreenLayoutOverlayMask}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalScreenLayoutOverlayMask}
+        >
           <View
             style={[
               styles.fundPresentationDrawerSheet,
@@ -436,7 +595,6 @@ export default function WalletScreen() {
             ]}
           >
             <View style={styles.sheetLayoutTopBarIndicator} />
-
             <AppText
               size={18}
               weight="bold"
@@ -472,6 +630,7 @@ export default function WalletScreen() {
                 keyboardType="numeric"
                 placeholder="0.00"
                 placeholderTextColor={colors.textMuted}
+                autoFocus={true}
               />
             </View>
 
@@ -509,7 +668,10 @@ export default function WalletScreen() {
                   styles.actionModalGridHalfBtn,
                   { borderColor: colors.border, borderWidth: 1 },
                 ]}
-                onPress={() => setFundModalVisible(false)}
+                onPress={() => {
+                  setFundModalVisible(false);
+                  setFundAmount("");
+                }}
               >
                 <AppText size={14} weight="bold" color={colors.text}>
                   Cancel
@@ -520,18 +682,71 @@ export default function WalletScreen() {
                   styles.actionModalGridHalfBtn,
                   { backgroundColor: colors.primary },
                 ]}
-                onPress={() => {
-                  setFundModalVisible(false);
-                  setFundAmount("");
-                }}
+                onPress={handleFundAccount}
+                disabled={isLoading}
               >
-                <AppText size={14} weight="bold" color="#FFF">
-                  Confirm 
-                </AppText>
+                {isLoading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <AppText size={14} weight="bold" color="#FFF">
+                    Confirm
+                  </AppText>
+                )}
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ==================== MODAL 3: INLINE PAYSTACK GATEWAY INTERFACES (WEBVIEW) ==================== */}
+      <Modal
+        animationType="fade"
+        transparent={false}
+        visible={webViewModalVisible}
+        onRequestClose={() => {
+          setWebViewModalVisible(false);
+          setPaystackUrl(null);
+          setActiveReference(null);
+        }}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#FFF" }}>
+          <View style={styles.webViewHeaderLayout}>
+            <TouchableOpacity
+              style={styles.webViewCloseButton}
+              onPress={() => {
+                setWebViewModalVisible(false);
+                setPaystackUrl(null);
+                setActiveReference(null);
+                dispatch(fetchWallet());
+              }}
+            >
+              <AppText size={14} weight="bold" color="#EF4444">
+                Cancel Payment
+              </AppText>
+            </TouchableOpacity>
+            <AppText size={15} weight="bold" color="#1F2937">
+              Secure Checkout
+            </AppText>
+            <View style={{ width: 80 }} />
+          </View>
+
+          {paystackUrl && (
+            <WebView
+              source={{ uri: paystackUrl }}
+              onNavigationStateChange={handleWebViewNavigationStateChange}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              startInLoadingState={true}
+              renderLoading={() => (
+                <ActivityIndicator
+                  color={colors.primary}
+                  size="large"
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
+            />
+          )}
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -563,8 +778,6 @@ const styles = StyleSheet.create({
   },
   scrollView: { flex: 1 },
   scrollContent: { padding: 20 },
-
-  /* Balance Component Architectures */
   balanceMasterCard: {
     borderRadius: 24,
     padding: 24,
@@ -579,17 +792,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
-  /* Data Monitoring Grid Layout Units */
-  statsRowGridLayout: { flexDirection: "row", gap: 12, marginBottom: 24 },
-  smallMetricCardBox: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-
-  /* Financial Logs List Interface Blocks */
   sectionTitleLayoutDock: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -612,8 +814,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 4,
   },
-
-  /* Overlay Presentation Layout Layer Engineering */
   modalScreenLayoutOverlayMask: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
@@ -622,7 +822,7 @@ const styles = StyleSheet.create({
   detailModalPresentationSheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    height: SCREEN_HEIGHT * 0.65,
+    height: SCREEN_HEIGHT * 0.72,
     paddingTop: 12,
   },
   modalHeaderActionBarLayout: {
@@ -640,7 +840,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
   },
-
   centerAuditHeroUnitBanner: {
     padding: 20,
     borderRadius: 20,
@@ -662,7 +861,15 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(0,0,0,0.05)",
     paddingVertical: 12,
   },
-
+  primaryRoutingButton: {
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 18,
+    marginBottom: 32,
+    width: "100%",
+  },
   fundPresentationDrawerSheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -718,5 +925,20 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
+  },
+  webViewHeaderLayout: {
+    height: 56,
+    backgroundColor: "#F9FAFB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    paddingHorizontal: 16,
+  },
+  webViewCloseButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
   },
 });

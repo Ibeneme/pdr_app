@@ -128,8 +128,9 @@ const paymentSlice = createSlice({
                 (state, action: PayloadAction<string | undefined>) => {
                     state.isLoading = false;
                     state.isPaymentSuccess = false;
-                    state.error = action.payload || "Payment handling system error event";
-                    console.error(`🚨 [SLICE_REJECTED] Global payment exception caught: ${state.error}`);
+                    // state.error = action.payload || "Payment handling system error event";
+                    // console.error(`🚨 [SLICE_REJECTED] Global payment exception caught: ${state.error}`);
+                
                 }
             );
     },

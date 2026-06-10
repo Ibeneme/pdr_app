@@ -5,6 +5,9 @@ import parcelSlice from './slices/parcel.slice';
 import rideSlice from './slices/ride.slice';
 import negotiationSlice from './slices/negotiation.slice';
 import paymentSlice from './slices/payment.slice';
+import notificationSlice from './slices/notification.slice';
+import walletSlice from './slices/wallet.slice';
+import driverSlice from './slices/driver.slice';
 
 export const store = configureStore({
     reducer: {
@@ -14,6 +17,9 @@ export const store = configureStore({
         ride: rideSlice,
         negotiation: negotiationSlice,
         payment: paymentSlice,
+        notification: notificationSlice,
+        wallet: walletSlice,
+        driver: driverSlice,
     },
 });
 

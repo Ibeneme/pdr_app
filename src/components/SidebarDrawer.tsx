@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
   ActivityIndicator,
   Image,
+  Linking,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -50,10 +51,28 @@ export default function SidebarDrawer({
   const dispatch = useDispatch<AppDispatch>();
   const { profile } = useSelector((state: RootState) => state.user);
 
-  // Local State for Loading Profile
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch profile when drawer opens
+  // Email Dispatcher Function
+  const handleContactAdmin = async () => {
+    // You can customize the email address here
+    const email = "padimanroute@gmail.com";
+    const subject = "Support Request";
+    const body = "Hello Admin, I would like to reach out regarding...";
+    const url = `mailto:${email}?subject=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(body)}`;
+
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      }
+    } catch (error) {
+      console.error("Could not open email app", error);
+    }
+  };
+
   useEffect(() => {
     if (isOpen && !profile) {
       setIsLoading(true);
@@ -65,16 +84,12 @@ export default function SidebarDrawer({
     }
   }, [isOpen, profile, dispatch]);
 
-  // Compute initials for the avatar placeholder layout block
   const getInitials = () => {
     if (!profile?.fullName) return "PR";
-
     const nameParts = profile.fullName.trim().split(" ");
-
     if (nameParts.length === 1) {
       return nameParts[0].substring(0, 2).toUpperCase();
     }
-
     return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
   };
 
@@ -88,7 +103,6 @@ export default function SidebarDrawer({
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlayContainer}>
-        {/* Dismissal Click Area Backdrop curtain */}
         <TouchableOpacity
           style={styles.backdropClickArea}
           activeOpacity={1}
@@ -101,7 +115,6 @@ export default function SidebarDrawer({
             { backgroundColor: colors.background, width: width * 0.78 },
           ]}
         >
-          {/* Header Block featuring Operator Metadata Profiles */}
           <SafeAreaView
             style={[
               styles.drawerHeaderContainer,
@@ -171,7 +184,6 @@ export default function SidebarDrawer({
             </View>
           </SafeAreaView>
 
-          {/* Structured Navigation Lists */}
           <ScrollView
             style={styles.sidebarLinkScroller}
             showsVerticalScrollIndicator={false}
@@ -179,14 +191,13 @@ export default function SidebarDrawer({
             {[
               { label: "My Profile", route: "PROFILE", icon: User },
               { label: "Orders & Logs", route: "HISTORY", icon: History },
-              { label: "Wallet Core", route: "WALLET", icon: Wallet },
+              { label: "Wallet", route: "WALLET", icon: Wallet },
               {
                 label: "Withdrawals",
                 route: "WITHDRAWALS",
                 icon: ArrowUpRight,
               },
               { label: "System Settings", route: "SETTINGS", icon: Settings },
-              { label: "Support Terminal", route: "SUPPORT", icon: HelpCircle },
             ].map((item, index) => {
               const IconComponent = item.icon;
               return (
@@ -213,9 +224,29 @@ export default function SidebarDrawer({
                 </TouchableOpacity>
               );
             })}
+
+            {/* Added Contact Admin Button */}
+            <TouchableOpacity
+              style={[
+                styles.sidebarLinkRow,
+                { borderBottomColor: colors.border },
+              ]}
+              onPress={handleContactAdmin}
+              activeOpacity={0.7}
+            >
+              <View style={styles.sidebarLinkLeft}>
+                <HelpCircle
+                  color={colors.textMuted}
+                  size={20}
+                  style={styles.sidebarLinkIcon}
+                />
+                <AppText size={14} weight="medium" color={colors.text}>
+                  Contact Admin & Support
+                </AppText>
+              </View>
+            </TouchableOpacity>
           </ScrollView>
 
-          {/* Bottom Controls Footnote Row */}
           <View
             style={[
               styles.sidebarFooterControl,

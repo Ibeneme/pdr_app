@@ -1,5 +1,5 @@
 // app/(screens)/profile.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -9,33 +9,183 @@ import {
   TextInput,
   SafeAreaView,
   StatusBar,
+  ActivityIndicator,
+  Modal,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { ArrowLeft, Camera, Check } from "lucide-react-native";
+import { ArrowLeft, Camera, Check, User } from "lucide-react-native";
 import { useTheme } from "@/contexts/ThemeContext";
 import { AppText } from "@/components/AppText";
+
+// Redux
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/api/store";
+import {
+  getProfile,
+  updateProfile,
+  updateProfilePicture,
+} from "@/api/slices/user.slice";
+
+// Image Picker
+import * as ImagePicker from "expo-image-picker";
+
+// Import City Selector
+import { NigeriaCitiesGrid, NigeriaCity } from "@/components/NigeriaCitiesGrid";
 
 export default function ProfileScreen() {
   const { theme: colors, isDark } = useTheme();
   const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
+
+  const { profile, isLoading } = useSelector((state: RootState) => state.user);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [showCityModal, setShowCityModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Personal Info
-  const [fullName, setFullName] = useState("Deniro Erhuvwu Ohanomah");
-  const [username, setUsername] = useState("Denny2345");
-  const [mobileNumber, setMobileNumber] = useState("+234 810 634 5046");
-  const [gender, setGender] = useState("Male");
-  const [email, setEmail] = useState("realdohans@gmail.com");
-  const [address, setAddress] = useState("No 14 Silverlane rd, Port Harcourt");
-  const [skillset, setSkillset] = useState("Upholstery worker");
-  const [city, setCity] = useState("Port Harcourt");
-  const [idMeans, setIdMeans] = useState("National ID");
+  // Local state
+  const [fullName, setFullName] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
+  const [gender, setGender] = useState("");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [occupation, setOccupation] = useState("");
+  const [city, setCity] = useState("");
+  const [driverLicenseNumber, setDriverLicenseNumber] = useState("");
+  const [idMeans, setIdMeans] = useState("");
 
-  // Statistics
-  const [deliveriesDone, setDeliveriesDone] = useState("124");
-  const [ridesOffered, setRidesOffered] = useState("87");
-  const [parcelsRequested, setParcelsRequested] = useState("56");
+  // Load profile
+  useEffect(() => {
+    dispatch(getProfile());
+  }, [dispatch]);
+
+  // Populate form
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.fullName || "");
+      setMobileNumber(profile.phone || "");
+      setGender(profile.gender || "");
+      setEmail(profile.email || "");
+      setAddress(profile.address || "");
+      setOccupation(profile.occupation || "");
+      setCity(profile.city || "");
+      setDriverLicenseNumber(profile.driverLicenseNumber || "");
+      setIdMeans(profile.idMeans || "");
+    }
+  }, [profile]);
+
+  const handleSaveProfile = async () => {
+    const updateData: any = {};
+    if (fullName) updateData.fullName = fullName;
+    if (mobileNumber) updateData.phone = mobileNumber;
+    if (gender) updateData.gender = gender;
+    if (email) updateData.email = email;
+    if (address) updateData.address = address;
+    if (occupation) updateData.occupation = occupation;
+    if (city) updateData.city = city;
+    if (driverLicenseNumber)
+      updateData.driverLicenseNumber = driverLicenseNumber;
+    if (idMeans) updateData.idMeans = idMeans;
+
+    await dispatch(updateProfile(updateData));
+    setIsEditing(false);
+  };
+
+  const handleCitySelect = (selectedCity: NigeriaCity) => {
+    setCity(selectedCity.name);
+    setShowCityModal(false);
+  };
+
+  // Gender Selection
+  const genderOptions = ["Male", "Female"];
+
+  const renderGenderSelector = () => (
+    <View style={styles.genderGrid}>
+      {genderOptions.map((g) => (
+        <TouchableOpacity
+          key={g}
+          style={[
+            styles.genderOption,
+            {
+              backgroundColor: gender === g ? colors.primary : colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
+          onPress={() => setGender(g)}
+        >
+          <AppText
+            size={15}
+            weight={gender === g ? "bold" : "medium"}
+            color={gender === g ? "#FFFFFF" : colors.text}
+          >
+            {g}
+          </AppText>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  // Get initials for avatar
+  const getInitials = (name: string) => {
+    if (!name) return "U";
+    const names = name.trim().split(" ");
+    if (names.length >= 2) {
+      return (names[0][0] + names[1][0]).toUpperCase();
+    }
+    return names[0].slice(0, 2).toUpperCase();
+  };
+
+  // Pick and Upload Image
+  const pickAndUploadImage = async () => {
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Permission Required",
+        "You need to grant gallery access to change profile picture."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+
+      // Check file size (5MB max)
+      if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
+        Alert.alert("File Too Large", "Image must be less than 5MB.");
+        return;
+      }
+
+      setSelectedImage(asset.uri);
+      setUploadingImage(true);
+
+      try {
+        const formData = new FormData();
+        formData.append("profileImage", {
+          uri: asset.uri,
+          type: asset.mimeType || "image/jpeg",
+          name: "profile.jpg",
+        } as any);
+
+        await dispatch(updateProfilePicture(formData));
+        Alert.alert("Success", "Profile picture updated successfully!");
+      } catch (error) {
+        Alert.alert("Error", "Failed to upload image.");
+      } finally {
+        setUploadingImage(false);
+      }
+    }
+  };
 
   // ====================== EDIT MODE ======================
   if (isEditing) {
@@ -60,24 +210,50 @@ export default function ProfileScreen() {
             Edit Profile
           </AppText>
 
-          <TouchableOpacity onPress={() => setIsEditing(false)}>
+          <TouchableOpacity onPress={handleSaveProfile}>
             <AppText size={16} weight="bold" color={colors.primary}>
               Save
             </AppText>
           </TouchableOpacity>
         </View>
 
+        {(isLoading || uploadingImage) && (
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+            style={{ margin: 20 }}
+          />
+        )}
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollBodyContainer}
         >
           <View style={styles.avatarCenteredBlockAnchor}>
-            <Image
-              source={{
-                uri: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200",
-              }}
-              style={styles.userMainProfileAvatarFrame}
-            />
+            <TouchableOpacity onPress={pickAndUploadImage}>
+              {selectedImage || profile?.profileImage ? (
+                <Image
+                  source={{ uri: selectedImage || profile?.profileImage }}
+                  style={styles.userMainProfileAvatarFrame}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.userMainProfileAvatarFrame,
+                    {
+                      backgroundColor: colors.primary,
+                      justifyContent: "center",
+                      alignItems: "center",
+                    },
+                  ]}
+                >
+                  <AppText size={32} weight="bold" color="#FFFFFF">
+                    {getInitials(fullName || "U")}
+                  </AppText>
+                </View>
+              )}
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[
                 styles.cameraOverlayIndicatorBadge,
@@ -86,18 +262,18 @@ export default function ProfileScreen() {
                   borderColor: colors.background,
                 },
               ]}
+              onPress={pickAndUploadImage}
             >
               <Camera size={14} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
-          {/* Statistics Fields in Edit Mode */}
           <AppText
             size={12}
             color={colors.textMuted}
             style={styles.fieldLabelSpacing}
           >
-            Deliveries Done
+            Full Name
           </AppText>
           <TextInput
             style={[
@@ -106,78 +282,11 @@ export default function ProfileScreen() {
                 backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
                 color: colors.text,
                 borderColor: colors.border,
-                borderWidth: 1,
-              },
-            ]}
-            value={deliveriesDone}
-            onChangeText={setDeliveriesDone}
-            keyboardType="numeric"
-          />
-
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Rides Offered
-          </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-                borderWidth: 1,
-              },
-            ]}
-            value={ridesOffered}
-            onChangeText={setRidesOffered}
-            keyboardType="numeric"
-          />
-
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Parcels Requested to be Sent
-          </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-                borderWidth: 1,
-              },
-            ]}
-            value={parcelsRequested}
-            onChangeText={setParcelsRequested}
-            keyboardType="numeric"
-          />
-
-          {/* Personal Fields */}
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Full name
-          </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-                borderWidth: 1,
               },
             ]}
             value={fullName}
             onChangeText={setFullName}
+            placeholder="Enter full name"
           />
 
           <AppText
@@ -185,7 +294,7 @@ export default function ProfileScreen() {
             color={colors.textMuted}
             style={styles.fieldLabelSpacing}
           >
-            Username
+            Phone Number
           </AppText>
           <TextInput
             style={[
@@ -194,44 +303,13 @@ export default function ProfileScreen() {
                 backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
                 color: colors.text,
                 borderColor: colors.border,
-                borderWidth: 1,
               },
             ]}
-            value={username}
-            onChangeText={setUsername}
+            value={mobileNumber}
+            onChangeText={setMobileNumber}
+            keyboardType="phone-pad"
+            placeholder="Enter phone number"
           />
-
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Phone number
-          </AppText>
-          <View
-            style={[
-              styles.phoneInputRowFrameBox,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                borderColor: colors.border,
-                borderWidth: 1,
-              },
-            ]}
-          >
-            <AppText
-              size={14}
-              color={colors.text}
-              style={{ marginRight: 8, fontWeight: "500" }}
-            >
-              +234
-            </AppText>
-            <TextInput
-              style={{ flex: 1, fontSize: 14, color: colors.text }}
-              value={mobileNumber}
-              onChangeText={setMobileNumber}
-              keyboardType="phone-pad"
-            />
-          </View>
 
           <AppText
             size={12}
@@ -240,19 +318,7 @@ export default function ProfileScreen() {
           >
             Gender
           </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-                borderWidth: 1,
-              },
-            ]}
-            value={gender}
-            onChangeText={setGender}
-          />
+          {renderGenderSelector()}
 
           <AppText
             size={12}
@@ -261,28 +327,20 @@ export default function ProfileScreen() {
           >
             Email
           </AppText>
-          <View
+          <TextInput
             style={[
-              styles.inlineActionInputFieldRow,
+              styles.profileInputFrameField,
               {
                 backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
+                color: colors.text,
                 borderColor: colors.border,
-                borderWidth: 1,
               },
             ]}
-          >
-            <TextInput
-              style={{ flex: 1, fontSize: 14, color: colors.text }}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-            />
-            <TouchableOpacity>
-              <AppText size={13} weight="bold" color={colors.primary}>
-                Verify
-              </AppText>
-            </TouchableOpacity>
-          </View>
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            placeholder="Enter email"
+          />
 
           <AppText
             size={12}
@@ -298,11 +356,11 @@ export default function ProfileScreen() {
                 backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
                 color: colors.text,
                 borderColor: colors.border,
-                borderWidth: 1,
               },
             ]}
             value={address}
             onChangeText={setAddress}
+            placeholder="Enter address"
           />
 
           <AppText
@@ -310,7 +368,7 @@ export default function ProfileScreen() {
             color={colors.textMuted}
             style={styles.fieldLabelSpacing}
           >
-            Skillset
+            Occupation
           </AppText>
           <TextInput
             style={[
@@ -319,11 +377,11 @@ export default function ProfileScreen() {
                 backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
                 color: colors.text,
                 borderColor: colors.border,
-                borderWidth: 1,
               },
             ]}
-            value={skillset}
-            onChangeText={setSkillset}
+            value={occupation}
+            onChangeText={setOccupation}
+            placeholder="Enter occupation"
           />
 
           <AppText
@@ -331,7 +389,31 @@ export default function ProfileScreen() {
             color={colors.textMuted}
             style={styles.fieldLabelSpacing}
           >
-            City of residence
+            City
+          </AppText>
+          <TouchableOpacity onPress={() => setShowCityModal(true)}>
+            <View
+              style={[
+                styles.profileInputFrameField,
+                {
+                  backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
+                  justifyContent: "center",
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <AppText color={city ? colors.text : colors.textMuted}>
+                {city || "Select City"}
+              </AppText>
+            </View>
+          </TouchableOpacity>
+
+          <AppText
+            size={12}
+            color={colors.textMuted}
+            style={styles.fieldLabelSpacing}
+          >
+            Driver License Number
           </AppText>
           <TextInput
             style={[
@@ -340,11 +422,11 @@ export default function ProfileScreen() {
                 backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
                 color: colors.text,
                 borderColor: colors.border,
-                borderWidth: 1,
               },
             ]}
-            value={city}
-            onChangeText={setCity}
+            value={driverLicenseNumber}
+            onChangeText={setDriverLicenseNumber}
+            placeholder="Enter license number (if driver)"
           />
 
           <AppText
@@ -361,13 +443,30 @@ export default function ProfileScreen() {
                 backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
                 color: colors.text,
                 borderColor: colors.border,
-                borderWidth: 1,
               },
             ]}
             value={idMeans}
             onChangeText={setIdMeans}
+            placeholder="Enter ID type"
           />
         </ScrollView>
+
+        {/* City Selection Modal */}
+        <Modal
+          visible={showCityModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+        >
+          <NigeriaCitiesGrid onCityPress={handleCitySelect} />
+          <TouchableOpacity
+            style={styles.closeModalBtn}
+            onPress={() => setShowCityModal(false)}
+          >
+            <AppText color={colors.primary} weight="bold">
+              Close
+            </AppText>
+          </TouchableOpacity>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -389,11 +488,9 @@ export default function ProfileScreen() {
         >
           <ArrowLeft size={20} color={colors.text} />
         </TouchableOpacity>
-
         <AppText size={20} weight="bold" color={colors.text}>
           Profile
         </AppText>
-
         <View style={{ width: 40 }} />
       </View>
 
@@ -402,12 +499,27 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollBodyContainer}
       >
         <View style={styles.avatarCenteredBlockAnchor}>
-          <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200",
-            }}
-            style={styles.userMainProfileAvatarFrame}
-          />
+          {profile?.profileImage ? (
+            <Image
+              source={{ uri: profile.profileImage }}
+              style={styles.userMainProfileAvatarFrame}
+            />
+          ) : (
+            <View
+              style={[
+                styles.userMainProfileAvatarFrame,
+                {
+                  backgroundColor: colors.primary,
+                  justifyContent: "center",
+                  alignItems: "center",
+                },
+              ]}
+            >
+              <AppText size={32} weight="bold" color="#FFFFFF">
+                {getInitials(profile?.fullName || "U")}
+              </AppText>
+            </View>
+          )}
           <View
             style={[
               styles.cameraOverlayIndicatorBadge,
@@ -421,167 +533,167 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ====================== STATISTICS SECTION ====================== */}
-        <View style={styles.statsContainer}>
+        {/* Only show fields that have values */}
+        {profile?.fullName && (
           <View
             style={[
-              styles.statCard,
-              { backgroundColor: isDark ? "#1E1E1E" : "#F8FAFC" },
+              styles.readOnlyFieldBlockRow,
+              { borderColor: colors.border },
             ]}
           >
-            <AppText size={18} weight="bold" color={colors.primary}>
-              {deliveriesDone}
+            <AppText size={14} color={colors.textMuted}>
+              Full Name:
             </AppText>
-            <AppText
-              size={12}
-              color={colors.textMuted}
-              style={{ textAlign: "center" }}
-            >
-              Deliveries Done
+            <AppText size={14} weight="medium" color={colors.text}>
+              {profile.fullName}
             </AppText>
           </View>
+        )}
 
+        {profile?.phone && (
           <View
             style={[
-              styles.statCard,
-              { backgroundColor: isDark ? "#1E1E1E" : "#F8FAFC" },
+              styles.readOnlyFieldBlockRow,
+              { borderColor: colors.border },
             ]}
           >
-            <AppText size={18} weight="bold" color={colors.primary}>
-              {ridesOffered}
+            <AppText size={14} color={colors.textMuted}>
+              Mobile Number:
             </AppText>
-            <AppText
-              size={12}
-              color={colors.textMuted}
-              style={{ textAlign: "center" }}
-            >
-              Rides Offered
+            <AppText size={14} weight="medium" color={colors.text}>
+              {profile.phone}
             </AppText>
           </View>
+        )}
 
+        {profile?.gender &&
+          profile.gender.toLowerCase() !== "prefer not to say" && (
+            <View
+              style={[
+                styles.readOnlyFieldBlockRow,
+                { borderColor: colors.border },
+              ]}
+            >
+              <AppText size={14} color={colors.textMuted}>
+                Gender:
+              </AppText>
+              <AppText size={14} weight="medium" color={colors.text}>
+                {profile.gender}
+              </AppText>
+            </View>
+          )}
+
+        {profile?.email && (
           <View
             style={[
-              styles.statCard,
-              { backgroundColor: isDark ? "#1E1E1E" : "#F8FAFC" },
+              styles.readOnlyFieldBlockRow,
+              { borderColor: colors.border },
             ]}
           >
-            <AppText size={18} weight="bold" color={colors.primary}>
-              {parcelsRequested}
+            <AppText size={14} color={colors.textMuted}>
+              Email:
             </AppText>
-            <AppText
-              size={12}
-              color={colors.textMuted}
-              style={{ textAlign: "center" }}
-            >
-              Parcels Sent
+            <AppText size={14} weight="medium" color={colors.text}>
+              {profile.email}
             </AppText>
           </View>
-        </View>
+        )}
 
-        {/* Personal Information */}
-        <View
-          style={[styles.readOnlyFieldBlockRow, { borderColor: colors.border }]}
-        >
-          <AppText size={14} color={colors.textMuted}>
-            Full Name:
-          </AppText>
-          <AppText size={14} weight="medium" color={colors.text}>
-            {fullName}
-          </AppText>
-        </View>
-
-        <View
-          style={[styles.readOnlyFieldBlockRow, { borderColor: colors.border }]}
-        >
-          <AppText size={14} color={colors.textMuted}>
-            Username:
-          </AppText>
-          <AppText size={14} weight="medium" color={colors.text}>
-            {username}
-          </AppText>
-        </View>
-
-        <View
-          style={[styles.readOnlyFieldBlockRow, { borderColor: colors.border }]}
-        >
-          <AppText size={14} color={colors.textMuted}>
-            Mobile Number:
-          </AppText>
-          <AppText size={14} weight="medium" color={colors.text}>
-            {mobileNumber}
-          </AppText>
-        </View>
-
-        <View
-          style={[styles.readOnlyFieldBlockRow, { borderColor: colors.border }]}
-        >
-          <AppText size={14} color={colors.textMuted}>
-            Gender:
-          </AppText>
-          <AppText size={14} weight="medium" color={colors.text}>
-            {gender}
-          </AppText>
-        </View>
-
-        <View
-          style={[styles.readOnlyFieldBlockRow, { borderColor: colors.border }]}
-        >
-          <AppText size={14} color={colors.textMuted}>
-            Email:
-          </AppText>
-          <AppText size={14} weight="medium" color={colors.text}>
-            {email}
-          </AppText>
-        </View>
-
-        <View
-          style={[styles.readOnlyFieldBlockRow, { borderColor: colors.border }]}
-        >
-          <AppText size={14} color={colors.textMuted}>
-            Address:
-          </AppText>
-          <AppText
-            size={14}
-            weight="medium"
-            color={colors.text}
-            style={{ flex: 1, textAlign: "right" }}
+        {profile?.address && (
+          <View
+            style={[
+              styles.readOnlyFieldBlockRow,
+              { borderColor: colors.border },
+            ]}
           >
-            {address}
-          </AppText>
-        </View>
+            <AppText size={14} color={colors.textMuted}>
+              Address:
+            </AppText>
+            <AppText size={14} weight="medium" color={colors.text}>
+              {profile.address}
+            </AppText>
+          </View>
+        )}
 
-        <View
-          style={[styles.readOnlyFieldBlockRow, { borderColor: colors.border }]}
-        >
-          <AppText size={14} color={colors.textMuted}>
-            Skillset:
-          </AppText>
-          <AppText size={14} weight="medium" color={colors.text}>
-            {skillset}
-          </AppText>
-        </View>
+        {profile?.occupation && (
+          <View
+            style={[
+              styles.readOnlyFieldBlockRow,
+              { borderColor: colors.border },
+            ]}
+          >
+            <AppText size={14} color={colors.textMuted}>
+              Occupation:
+            </AppText>
+            <AppText size={14} weight="medium" color={colors.text}>
+              {profile.occupation}
+            </AppText>
+          </View>
+        )}
 
-        <View
-          style={[styles.readOnlyFieldBlockRow, { borderColor: colors.border }]}
-        >
-          <AppText size={14} color={colors.textMuted}>
-            City of residence:
-          </AppText>
-          <AppText size={14} weight="medium" color={colors.text}>
-            {city}
-          </AppText>
-        </View>
+        {profile?.city && (
+          <View
+            style={[
+              styles.readOnlyFieldBlockRow,
+              { borderColor: colors.border },
+            ]}
+          >
+            <AppText size={14} color={colors.textMuted}>
+              City:
+            </AppText>
+            <AppText size={14} weight="medium" color={colors.text}>
+              {profile.city}
+            </AppText>
+          </View>
+        )}
 
-        <View
-          style={[styles.readOnlyFieldBlockRow, { borderColor: colors.border }]}
+        {profile?.driverLicenseNumber && (
+          <View
+            style={[
+              styles.readOnlyFieldBlockRow,
+              { borderColor: colors.border },
+            ]}
+          >
+            <AppText size={14} color={colors.textMuted}>
+              Driver License No:
+            </AppText>
+            <AppText size={14} weight="medium" color={colors.text}>
+              {profile.driverLicenseNumber}
+            </AppText>
+          </View>
+        )}
+
+        {profile?.idMeans && (
+          <View
+            style={[
+              styles.readOnlyFieldBlockRow,
+              { borderColor: colors.border },
+            ]}
+          >
+            <AppText size={14} color={colors.textMuted}>
+              Means of Identification:
+            </AppText>
+            <AppText size={14} weight="medium" color={colors.text}>
+              {profile.idMeans}
+            </AppText>
+          </View>
+        )}
+
+        {/* Become a Driver Card */}
+        <TouchableOpacity
+          style={[
+            styles.becomeDriverCard,
+            { backgroundColor: colors.surface, borderColor: colors.primary },
+          ]}
+          onPress={() => router.push("/(features)/become_driver")}
         >
-          <AppText size={14} color={colors.textMuted}>
-            Means of Identification:
+          <AppText size={16} weight="bold" color={colors.primary}>
+            Become a Driver
           </AppText>
-          <AppText size={14} weight="medium" color={colors.text}>
-            {idMeans}
+          <AppText size={13} color={colors.textMuted} style={{ marginTop: 4 }}>
+            Start earning by offering rides and deliveries
           </AppText>
-        </View>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[
@@ -641,21 +753,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 2,
   },
-
-  /* Stats Styles */
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 12,
-    marginHorizontal: 4,
-    borderRadius: 12,
-  },
-
   readOnlyFieldBlockRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -670,8 +767,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 32,
   },
-
-  /* Edit Mode Styles */
   fieldLabelSpacing: { marginTop: 14, marginBottom: 6, paddingLeft: 4 },
   profileInputFrameField: {
     height: 46,
@@ -679,18 +774,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 14,
   },
-  phoneInputRowFrameBox: {
+  genderGrid: {
     flexDirection: "row",
-    alignItems: "center",
-    height: 46,
-    borderRadius: 8,
-    paddingHorizontal: 14,
+    gap: 12,
+    marginBottom: 16,
   },
-  inlineActionInputFieldRow: {
-    flexDirection: "row",
+  genderOption: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: "center",
-    height: 46,
-    borderRadius: 8,
-    paddingHorizontal: 14,
+    borderWidth: 1,
+  },
+  closeModalBtn: {
+    padding: 20,
+    alignItems: "center",
+    backgroundColor: "#111",
+  },
+  becomeDriverCard: {
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    marginVertical: 20,
   },
 });

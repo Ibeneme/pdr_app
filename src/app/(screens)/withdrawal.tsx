@@ -1,5 +1,4 @@
-// app/(screens)/withdraw.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   StyleSheet,
   View,
@@ -11,6 +10,7 @@ import {
   TextInput,
   Modal,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -20,25 +20,102 @@ import {
   CheckCircle,
   AlertCircle,
   X,
+  ChevronDown,
+  Search,
 } from "lucide-react-native";
 import { AppText } from "@/components/AppText";
+
+// Redux Integration Imports
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/api/store";
+import {
+  fetchWallet,
+  fetchBankList,
+  requestWithdrawal,
+  resolveAccount, // Added thunk import
+} from "@/api/slices/wallet.slice";
 
 export default function WithdrawScreen() {
   const { theme: colors, isDark } = useTheme();
   const router = useRouter();
 
-  const [amount, setAmount] = useState("");
-  const [bank, setBank] = useState("GTBank");
-  const [accountNumber, setAccountNumber] = useState("0123456789");
-  const [accountName, setAccountName] = useState("Deniro Erhuvwu Ohanomah");
+  // Redux Hook Allocations
+  const dispatch = useDispatch<AppDispatch>();
+  const { balance, bankList, isLoading } = useSelector(
+    (state: RootState) => state.wallet
+  );
 
-  // Bottom Modal States
+  // Form Controlled Input Fields
+  const [amount, setAmount] = useState("");
+  const [selectedBankCode, setSelectedBankCode] = useState("");
+  const [selectedBankName, setSelectedBankName] = useState("Select a Bank");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [isResolving, setIsResolving] = useState(false); // Internal indicator tracking account verification
+
+  // Search Query State for Bank Picker
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Sheet UI Triggers
   const [modalVisible, setModalVisible] = useState(false);
+  const [bankPickerVisible, setBankPickerVisible] = useState(false);
   const [modalType, setModalType] = useState<"success" | "error">("error");
   const [modalTitle, setModalTitle] = useState("");
   const [modalMessage, setModalMessage] = useState("");
 
-  const availableBalance = 48750;
+  // Sync state data on initial context mount
+  useEffect(() => {
+    dispatch(fetchWallet());
+    dispatch(fetchBankList());
+  }, [dispatch]);
+
+  // Hook watching input rules to fire off account verification hooks automatically
+// Hook watching input rules to fire off account verification hooks automatically
+useEffect(() => {
+  const autoResolveBankDetails = async () => {
+    console.log(`🔍 [BANK_RESOLVER] Triggered. AccNum: ${accountNumber}, BankCode: ${selectedBankCode}`);
+
+    if (accountNumber.length === 10 && selectedBankCode) {
+      setIsResolving(true);
+      setAccountName(""); 
+
+      console.log(`🚀 [BANK_RESOLVER] Dispatching resolveAccount...`);
+
+      const resultAction = await dispatch(
+        resolveAccount({ accountNumber, bankCode: selectedBankCode })
+      );
+
+      setIsResolving(false);
+
+      if (resolveAccount.fulfilled.match(resultAction)) {
+        console.log(`✅ [BANK_RESOLVER_SUCCESS] Server returned:`, resultAction.payload);
+        setAccountName(resultAction.payload.accountName);
+      } else {
+        // Extract error payload
+        const errorMsg = (resultAction.payload as string) || "Unknown error";
+        
+        console.error(`❌ [BANK_RESOLVER_ERROR] Failed:`, errorMsg);
+
+        triggerModal("error", "Account Verification Failed", errorMsg);
+      }
+    } else {
+      if (accountNumber.length > 0) {
+         console.log(`⏳ [BANK_RESOLVER] Waiting for valid criteria... (Len: ${accountNumber.length})`);
+      }
+      setAccountName("");
+    }
+  };
+
+  autoResolveBankDetails();
+}, [accountNumber, selectedBankCode, dispatch]);
+
+  // Performance-optimized localized client filter for the banks list
+  const filteredBanks = useMemo(() => {
+    if (!searchQuery.trim()) return bankList;
+    return bankList.filter((bank) =>
+      bank.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [searchQuery, bankList]);
 
   const triggerModal = (
     type: "success" | "error",
@@ -51,23 +128,76 @@ export default function WithdrawScreen() {
     setModalVisible(true);
   };
 
-  const handleWithdraw = () => {
-    if (!amount || parseInt(amount) > availableBalance) {
+  const handleWithdraw = async () => {
+    const numericAmount = parseInt(amount, 10);
+
+    // Frontend Validations Rules
+    if (!amount || isNaN(numericAmount) || numericAmount <= 0) {
       triggerModal(
         "error",
         "Invalid Amount",
-        "Please enter a valid amount within your balance limits."
+        "Please input a realistic numerical value to withdraw."
+      );
+      return;
+    }
+    if (numericAmount > balance) {
+      triggerModal(
+        "error",
+        "Insufficient Funds",
+        `You cannot withdraw more than your available ledger balance of ₦${balance.toLocaleString()}.`
+      );
+      return;
+    }
+    if (!selectedBankCode || selectedBankName === "Select a Bank") {
+      triggerModal(
+        "error",
+        "Missing Bank Selector",
+        "Please choose a verified destination banking channel."
+      );
+      return;
+    }
+    if (accountNumber.length !== 10) {
+      triggerModal(
+        "error",
+        "Invalid Account Number",
+        "Nigerian NUBAN account records must be exactly 10 digits long."
+      );
+      return;
+    }
+    if (!accountName.trim()) {
+      triggerModal(
+        "error",
+        "Missing Recipient Details",
+        "Please fill out the authorized account holder's name."
       );
       return;
     }
 
-    triggerModal(
-      "success",
-      "Withdrawal Requested",
-      `₦${parseInt(
-        amount
-      ).toLocaleString()} has been requested to ${bank} • ${accountNumber}`
-    );
+    // Packaging structural data format matching backend requirements
+    const payload = {
+      amount: numericAmount,
+      bankDetails: {
+        accountName: accountName.trim(),
+        accountNumber: accountNumber,
+        bankName: selectedBankName,
+      },
+    };
+
+    // Dispatch asynchronous reduction operation
+    const resultAction = await dispatch(requestWithdrawal(payload));
+
+    if (requestWithdrawal.fulfilled.match(resultAction)) {
+      triggerModal(
+        "success",
+        "Withdrawal Requested",
+        `₦${numericAmount.toLocaleString()} has been queued for transfer to ${selectedBankName} • ${accountNumber}`
+      );
+    } else {
+      const errorMsg =
+        (resultAction.payload as string) ||
+        "An unexpected error occurred processing your payload.";
+      triggerModal("error", "Transaction Rejected", errorMsg);
+    }
   };
 
   const handleModalClose = () => {
@@ -76,6 +206,16 @@ export default function WithdrawScreen() {
       router.back();
     }
   };
+
+  const selectBankInstance = (name: string, code: string) => {
+    setSelectedBankName(name);
+    setSelectedBankCode(code);
+    setSearchQuery(""); // Reset search on choose
+    setBankPickerVisible(false);
+  };
+
+  // Determine if confirm action requirements are active or processing dependencies
+  const isButtonDisabled = isLoading || isResolving || !accountName.trim();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -114,7 +254,7 @@ export default function WithdrawScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Balance Card */}
+        {/* Balance Display Layout */}
         <View
           style={[
             styles.balanceCard,
@@ -130,7 +270,7 @@ export default function WithdrawScreen() {
             color={colors.text}
             style={{ marginTop: 6 }}
           >
-            ₦{availableBalance.toLocaleString()}
+            ₦{balance.toLocaleString()}
           </AppText>
           <AppText size={12} color={colors.textMuted} style={{ marginTop: 6 }}>
             Padiman Route • Instant Processing
@@ -152,7 +292,7 @@ export default function WithdrawScreen() {
             { backgroundColor: colors.surface, borderColor: colors.border },
           ]}
         >
-          {/* Amount Input */}
+          {/* Amount Field */}
           <AppText
             size={13}
             weight="medium"
@@ -177,7 +317,7 @@ export default function WithdrawScreen() {
             onChangeText={setAmount}
           />
 
-          {/* Bank */}
+          {/* Custom Select Bank Trigger Dropdown Menu Layout */}
           <AppText
             size={13}
             weight="medium"
@@ -186,22 +326,24 @@ export default function WithdrawScreen() {
           >
             Select Bank
           </AppText>
-          <View
+          <TouchableOpacity
             style={[
               styles.input,
+              styles.pickerTrigger,
               {
                 backgroundColor: colors.background,
                 borderColor: colors.border,
-                justifyContent: "center",
               },
             ]}
+            onPress={() => setBankPickerVisible(true)}
           >
             <AppText size={15} color={colors.text}>
-              {bank}
+              {selectedBankName}
             </AppText>
-          </View>
+            <ChevronDown size={18} color={colors.textMuted} />
+          </TouchableOpacity>
 
-          {/* Account Number */}
+          {/* Account Number Field */}
           <AppText
             size={13}
             weight="medium"
@@ -219,13 +361,15 @@ export default function WithdrawScreen() {
                 borderColor: colors.border,
               },
             ]}
+            placeholder="Enter 10-digit account number"
+            placeholderTextColor={colors.textMuted}
             value={accountNumber}
             onChangeText={setAccountNumber}
             keyboardType="numeric"
             maxLength={10}
           />
 
-          {/* Account Name */}
+          {/* Account Name Field */}
           <AppText
             size={13}
             weight="medium"
@@ -234,22 +378,34 @@ export default function WithdrawScreen() {
           >
             Account Name
           </AppText>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.background,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={accountName}
-            onChangeText={setAccountName}
-          />
+          <View style={{ justifyContent: "center" }}>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: isDark ? "#1f1f1f" : "#f5f5f5", // visually indicate a read-only field
+                  color: colors.text,
+                  borderColor: colors.border,
+                  paddingRight: 40,
+                },
+              ]}
+              placeholder="Auto-populated holder name"
+              placeholderTextColor={colors.textMuted}
+              value={accountName}
+              editable={false} // Managed solely through automated Paystack queries
+            />
+            {isResolving && (
+              <ActivityIndicator
+                size="small"
+                color={colors.primary}
+                style={{ position: "absolute", right: 14 }}
+              />
+            )}
+          </View>
         </View>
 
-        {/* Summary */}
-        {amount ? (
+        {/* Dynamic Summary Cards calculations rendering checks */}
+        {amount && !isNaN(parseInt(amount, 10)) ? (
           <View
             style={[
               styles.summaryCard,
@@ -264,7 +420,7 @@ export default function WithdrawScreen() {
                 Amount
               </AppText>
               <AppText size={15} weight="bold" color={colors.text}>
-                ₦{parseInt(amount || "0").toLocaleString()}
+                ₦{parseInt(amount, 10).toLocaleString()}
               </AppText>
             </View>
             <View style={styles.summaryRow}>
@@ -274,7 +430,7 @@ export default function WithdrawScreen() {
               <AppText
                 size={14}
                 weight="medium"
-                color={colors.success || "#22c55e"}
+                color={colors.text || "#22c55e"}
               >
                 Free (First withdrawal)
               </AppText>
@@ -282,21 +438,38 @@ export default function WithdrawScreen() {
           </View>
         ) : null}
 
-        {/* Withdraw Button */}
+        {/* Conditional rendering for submit buttons / loaders states blocks */}
         <TouchableOpacity
-          style={[styles.withdrawButton, { backgroundColor: colors.primary }]}
+          style={[
+            styles.withdrawButton,
+            {
+              backgroundColor: isButtonDisabled
+                ? colors.border
+                : colors.primary,
+            },
+          ]}
           onPress={handleWithdraw}
+          disabled={isButtonDisabled}
           activeOpacity={0.85}
         >
-          <AppText
-            size={16}
-            weight="bold"
-            color="#fff"
-            style={{ marginRight: 8 }}
-          >
-            Confirm Withdrawal
-          </AppText>
-          <ArrowUpRight size={20} color="#fff" />
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <AppText
+                size={16}
+                weight="bold"
+                color={isButtonDisabled ? colors.textMuted : "#fff"}
+                style={{ marginRight: 8 }}
+              >
+                Confirm Withdrawal
+              </AppText>
+              <ArrowUpRight
+                size={20}
+                color={isButtonDisabled ? colors.textMuted : "#fff"}
+              />
+            </>
+          )}
         </TouchableOpacity>
 
         <View style={styles.noteContainer}>
@@ -312,7 +485,141 @@ export default function WithdrawScreen() {
         </View>
       </ScrollView>
 
-      {/* Replaced standard alerts with Bottom Modal Layout */}
+      {/* MODAL 1: Live Bank Picker Bottom Sheet + Integrated Search Bar */}
+      <Modal
+        visible={bankPickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setSearchQuery("");
+          setBankPickerVisible(false);
+        }}
+      >
+        <TouchableWithoutFeedback
+          onPress={() => {
+            setSearchQuery("");
+            setBankPickerVisible(false);
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View
+                style={[
+                  styles.modalContent,
+                  {
+                    backgroundColor: colors.surface,
+                    minHeight: "85%",
+                    maxHeight: "90%",
+                  },
+                ]}
+              >
+                <View style={styles.modalIndicator} />
+                <View style={styles.pickerHeaderRow}>
+                  <AppText size={16} weight="bold" color={colors.text}>
+                    Select Destination Bank
+                  </AppText>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSearchQuery("");
+                      setBankPickerVisible(false);
+                    }}
+                  >
+                    <X size={20} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Newly Added Search Bar Wrapper Component */}
+                <View
+                  style={[
+                    styles.searchBarContainer,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Search
+                    size={18}
+                    color={colors.textMuted}
+                    style={styles.searchIcon}
+                  />
+                  <TextInput
+                    style={[styles.searchInputField, { color: colors.text }]}
+                    placeholder="Search bank name..."
+                    placeholderTextColor={colors.textMuted}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {searchQuery ? (
+                    <TouchableOpacity onPress={() => setSearchQuery("")}>
+                      <X
+                        size={16}
+                        color={colors.textMuted}
+                        style={{ padding: 4 }}
+                      />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                <ScrollView
+                  style={{ width: "100%" }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {bankList.length === 0 ? (
+                    <View style={{ padding: 24, alignItems: "center" }}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <AppText
+                        size={14}
+                        color={colors.textMuted}
+                        style={{ marginTop: 8 }}
+                      >
+                        Loading bank registers...
+                      </AppText>
+                    </View>
+                  ) : filteredBanks.length === 0 ? (
+                    <View style={{ padding: 32, alignItems: "center" }}>
+                      <AlertCircle size={32} color={colors.textMuted} />
+                      <AppText
+                        size={14}
+                        color={colors.textMuted}
+                        style={{ marginTop: 8 }}
+                      >
+                        No banks match "{searchQuery}"
+                      </AppText>
+                    </View>
+                  ) : (
+                    filteredBanks.map((item) => (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[
+                          styles.bankItemRow,
+                          { borderBottomColor: colors.border },
+                        ]}
+                        onPress={() => selectBankInstance(item.name, item.code)}
+                      >
+                        <AppText
+                          size={15}
+                          color={colors.text}
+                          weight={
+                            selectedBankCode === item.code ? "bold" : "regular"
+                          }
+                        >
+                          {item.name}
+                        </AppText>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* MODAL 2: Receipt Status Feedback Sheets */}
       <Modal
         visible={modalVisible}
         transparent={true}
@@ -329,7 +636,6 @@ export default function WithdrawScreen() {
                 ]}
               >
                 <View style={styles.modalIndicator} />
-
                 <TouchableOpacity
                   style={styles.closeButton}
                   onPress={handleModalClose}
@@ -439,6 +745,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
+  },
+  pickerTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pickerHeaderRow: {
+    flexDirection: "row",
+    width: "100%",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 16,
+  },
+  searchBarContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    marginBottom: 16,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInputField: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 8,
+  },
+  bankItemRow: {
+    width: "100%",
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
   },
   summaryCard: {
     padding: 16,

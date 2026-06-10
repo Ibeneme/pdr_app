@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -7,73 +7,136 @@ import {
   SafeAreaView,
   Platform,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
-import { router } from "expo-router";
 import { AppText } from "@/components/AppText";
+
+// Redux
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/api/store";
+import {
+  fetchNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+} from "@/api/slices/notification.slice";
 
 export default function NotificationsScreen() {
   const { theme: colors, isDark } = useTheme();
+  const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
 
-  const [notifications] = useState([
-    {
-      id: 1,
-      type: "ROUTE",
-      title: "Ride Request Accepted",
-      message: "Adebayo accepted your offer to join from GRA to Diobu",
-      time: "2 min ago",
-      read: false,
-    },
-    {
-      id: 2,
-      type: "WALLET",
-      title: "Payment Received",
-      message: "₦4,500 has been credited to your wallet for ride from Woji",
-      time: "18 min ago",
-      read: false,
-    },
-    {
-      id: 3,
-      type: "DISPATCH",
-      title: "Parcel Delivered",
-      message:
-        "Your parcel to Choba was successfully delivered by rider Kelechi",
-      time: "1 hr ago",
-      read: true,
-    },
-    {
-      id: 4,
-      type: "ESCROW",
-      title: "Withdrawal Successful",
-      message: "₦25,000 withdrawal to your GTBank account was processed",
-      time: "Yesterday",
-      read: true,
-    },
-    {
-      id: 5,
-      type: "ROUTE",
-      title: "New Ride Offer Near You",
-      message: "Someone is offering a ride from Port Harcourt Town to Elelenwo",
-      time: "Yesterday",
-      read: true,
-    },
-    {
-      id: 6,
-      type: "SYSTEM",
-      title: "Account Verified",
-      message: "Your rider profile has been successfully verified",
-      time: "2 days ago",
-      read: true,
-    },
-  ]);
+  const { notifications, unreadCount, isLoading, error } = useSelector(
+    (state: RootState) => state.notification
+  );
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  // Fetch notifications on component initialization
+  useEffect(() => {
+    dispatch(fetchNotifications());
+  }, [dispatch]);
+
+  const handleNotificationClick = async (notification: any) => {
+    if (!notification) return;
+
+    // 1. Mark as read immediately on user interaction hook if not already read
+    if (!notification.read && notification._id) {
+      dispatch(markNotificationAsRead(notification._id));
+    }
+
+    // Extract custom nested data context payloads safely
+    const payloadData = notification?.data || {};
+
+    if (notification.type === "WITHDRAWAL") {
+      return router.push("/(screens)/wallet");
+    }
+
+    // 2. Intercept PAYMENT type notifications to route using the transaction service properties
+    if (notification.type === "PAYMENT") {
+      const serviceId = payloadData.serviceId;
+      const serviceType = payloadData.serviceType;
+
+      console.log(
+        `🛎️ [PAYMENT ROUTING] Service ID: ${serviceId}, Type: ${serviceType}`
+      );
+
+      if (!serviceId) {
+        console.warn(
+          "⚠️ Missing serviceId in payment notification context payload."
+        );
+        return;
+      }
+
+      // A. Route to Deliver a Parcel Screen Context
+      if (serviceType === "deliver_a_parcel") {
+        return router.push({
+          pathname: "/(details)/details",
+          params: { id: serviceId },
+        });
+      }
+
+      // B. Route to Ride Offer / Ride Join Screen Context
+      if (serviceType === "ride_offer" || serviceType === "ride_join") {
+        return router.push({
+          pathname: "/(details)/ride",
+          params: {
+            id: serviceId,
+            driverName: payloadData.payerName || "Driver",
+            pickup: "View Details",
+            dropoff: "View Details",
+            fare: payloadData.amount || "",
+            seats: 1,
+          },
+        });
+      }
+    }
+
+    // =====================================================================
+    // 3. Fallback Routing Structure (For reference/orders/standard notifications)
+    // =====================================================================
+    const targetType = payloadData.type || notification.type;
+    const targetId =
+      payloadData.id || payloadData.serviceId || notification._id;
+
+    if (
+      targetType === "ride_offer" ||
+      targetType === "ride_join" ||
+      notification.type === "RIDE"
+    ) {
+      return router.push({
+        pathname: "/(details)/ride",
+        params: {
+          id: targetId,
+          driverName:
+            payloadData.driverName || payloadData.driver?.name || "Driver",
+          driverPhone:
+            payloadData.driverPhone || payloadData.driver?.phone || "",
+          pickup: payloadData.pickupPoint || payloadData.pickup || "Details",
+          dropoff: payloadData.dropoffPoint || payloadData.dropoff || "Details",
+          fare: payloadData.amount || payloadData.fare || "",
+          time: payloadData.departureTime || "",
+          seats: payloadData.availableSeats || 1,
+        },
+      });
+    } else {
+      // General fallback to detail route mapping
+      return router.push({
+        pathname: "/(details)/details",
+        params: { id: targetId },
+      });
+    }
+  };
+
+  const handleMarkAllAsRead = () => {
+    console.log("✅ Marking all notifications as read");
+    dispatch(markAllNotificationsAsRead());
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* --- HEADER DOCK CONTAINER --- */}
+      {/* --- HEADER CONTAINER --- */}
       <SafeAreaView
         style={[
           styles.headerSafeArea,
@@ -119,90 +182,115 @@ export default function NotificationsScreen() {
             )}
           </View>
 
-          <View style={{ width: 62 }} />
+          {unreadCount > 0 ? (
+            <TouchableOpacity onPress={handleMarkAllAsRead}>
+              <AppText size={13} weight="bold" color={colors.primary}>
+                Mark all read
+              </AppText>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 60 }} /> // Spacer to balance header row layout
+          )}
         </View>
       </SafeAreaView>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* --- SYSTEM LOG ENTRIES STACK --- */}
-        {notifications.map((notif, index) => (
-          <View
-            key={index}
-            style={[
-              styles.notificationCardFrame,
-              {
-                backgroundColor: colors.surface,
-                borderColor: notif.read ? colors.border : colors.primary,
-                borderWidth: notif.read ? 1 : 1.5,
-              },
-            ]}
-          >
-            <View style={styles.cardHeaderRowAlignment}>
-              <View
+      {/* --- CONTENT AREA LAYOUTS --- */}
+      {isLoading && notifications.length === 0 ? (
+        <View style={styles.centeredContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : error ? (
+        <View style={styles.centeredContainer}>
+          <AppText size={14} color="red" style={{ textAlign: "center" }}>
+            {error}
+          </AppText>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {notifications.length === 0 ? (
+            <View style={styles.emptyState}>
+              <AppText size={16} color={colors.textMuted}>
+                No notifications yet
+              </AppText>
+            </View>
+          ) : (
+            notifications.map((notif: any, index: number) => (
+              <TouchableOpacity
+                key={notif._id || index}
                 style={[
-                  styles.typeInlineLabelBadge,
+                  styles.notificationCardFrame,
                   {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    borderColor: notif.read ? colors.border : colors.primary,
+                    borderWidth: notif.read ? 1 : 1.5,
                   },
                 ]}
+                onPress={() => handleNotificationClick(notif)}
+                activeOpacity={0.85}
               >
-                <AppText
-                  size={9}
-                  weight="bold"
-                  color={notif.read ? colors.textMuted : colors.primary}
-                >
-                  {notif.type}
-                </AppText>
-              </View>
-              <AppText size={11} weight="medium" color={colors.textMuted}>
-                {notif.time}
-              </AppText>
-            </View>
+                <View style={styles.cardHeaderRowAlignment}>
+                  <View
+                    style={[
+                      styles.typeInlineLabelBadge,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <AppText
+                      size={9}
+                      weight="bold"
+                      color={notif.read ? colors.textMuted : colors.primary}
+                    >
+                      {notif.type || "GENERAL"}
+                    </AppText>
+                  </View>
+                  <AppText size={11} weight="medium" color={colors.textMuted}>
+                    {notif.createdAt
+                      ? new Date(notif.createdAt).toLocaleDateString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : ""}
+                  </AppText>
+                </View>
 
-            <View style={styles.notificationContentBlock}>
-              <AppText
-                size={15}
-                weight="bold"
-                color={colors.text}
-                style={{ marginBottom: 4 }}
-              >
-                {notif.title}
-              </AppText>
-              <AppText
-                size={13}
-                color={colors.textMuted}
-                style={{ lineHeight: 18 }}
-              >
-                {notif.message}
-              </AppText>
-            </View>
+                <View style={styles.notificationContentBlock}>
+                  <AppText
+                    size={15}
+                    weight="bold"
+                    color={colors.text}
+                    style={{ marginBottom: 4 }}
+                  >
+                    {notif.title}
+                  </AppText>
+                  <AppText
+                    size={13}
+                    color={colors.textMuted}
+                    style={{ lineHeight: 18 }}
+                  >
+                    {notif.body || notif.message}
+                  </AppText>
+                </View>
 
-            {!notif.read && (
-              <View
-                style={[
-                  styles.unreadMarkerLine,
-                  { backgroundColor: colors.primary },
-                ]}
-              />
-            )}
-          </View>
-        ))}
-
-        {/* --- HISTORICAL LOG LOADING TRIGGER --- */}
-        <TouchableOpacity
-          style={styles.loadOlderLogsActionBtn}
-          activeOpacity={0.7}
-        >
-          <AppText size={14} weight="bold" color={colors.primary}>
-            Fetch Historical Manifest Runs
-          </AppText>
-        </TouchableOpacity>
-      </ScrollView>
+                {!notif.read && (
+                  <View
+                    style={[
+                      styles.unreadMarkerLine,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  />
+                )}
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -277,8 +365,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 4,
   },
-  loadOlderLogsActionBtn: {
-    paddingVertical: 20,
+  centeredContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  emptyState: {
+    paddingTop: 60,
     alignItems: "center",
     justifyContent: "center",
   },

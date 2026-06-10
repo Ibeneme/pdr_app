@@ -290,7 +290,14 @@ export default function RequestDetailsScreen() {
                 Pay Now
               </AppText>
             </TouchableOpacity>
-          )}
+          )}   <TouchableOpacity
+          style={[styles.bannerPayBtn, { backgroundColor: theme.primary }]}
+          onPress={handlePayPress}
+        >
+          <AppText size={12} weight="bold" color="#FFF">
+            Pay Now
+          </AppText>
+        </TouchableOpacity>
 
           {/* VIEW RECEIPT CTA: Mutually visible to both service provider and negotiator once paid */}
           {hasAgreedAmount && isPaid && (

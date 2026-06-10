@@ -1,3 +1,4 @@
+// app/(details)/ride.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
@@ -10,6 +11,7 @@ import {
   Platform,
   Alert,
   Linking,
+  Image,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -165,6 +167,16 @@ export default function RideDetailsScreen() {
   const displayFare =
     ride?.estimatedFare || ride?.fare || ride?.price || params.fare || 0;
 
+  // Get initials for driver avatar
+  const getInitials = (name: string) => {
+    if (!name) return "D";
+    const names = name.trim().split(" ");
+    if (names.length >= 2) {
+      return (names[0][0] + names[1][0]).toUpperCase();
+    }
+    return names[0].slice(0, 2).toUpperCase();
+  };
+
   const handlePayPress = () => {
     console.log("💳 Redirecting to checkout framework pipeline...");
     router.push({
@@ -179,7 +191,6 @@ export default function RideDetailsScreen() {
   };
 
   const handleNegotiate = async () => {
-    // If API failed but we have routing parameters fallback
     const targetServiceProviderId = ride?.driver?._id || ride?.driver || null;
 
     if (!id) {
@@ -324,12 +335,7 @@ export default function RideDetailsScreen() {
             </AppText>
           </View>
 
-          {/* PAY NOW CTA: Restricted strictly to the Negotiator side */}
-          {hasAgreedAmount && !isPaid && 
-          
-        //  !isServiceProvider &&
-          
-          (
+          {hasAgreedAmount && !isPaid && (
             <TouchableOpacity
               style={[styles.bannerPayBtn, { backgroundColor: colors.primary }]}
               onPress={handlePayPress}
@@ -340,13 +346,10 @@ export default function RideDetailsScreen() {
             </TouchableOpacity>
           )}
 
-          {/* RECEIPT VIEW TRACE BUTTON: Accessible once paid */}
           {hasAgreedAmount && isPaid && (
             <TouchableOpacity
               style={[styles.bannerPayBtn, { backgroundColor: "#10B981" }]}
               onPress={() => {
-
-                console.warn(ride, 'rideride')
                 router.push({
                   pathname: "/(details)/ReceiptScreen",
                   params: {
@@ -357,13 +360,8 @@ export default function RideDetailsScreen() {
                     pickupAddress: displayPickup,
                     destinationCity: displayDropoff,
                     serviceType: "offer_a_ride",
-                    payerName: 
-                    currentUser?.fullName,
-                    // !isServiceProvider
-                    //   ? currentUser?.fullName
-                    //   : ride?.negotiator?.fullName || "Verified Rider",
+                    payerName: currentUser?.fullName,
                     payerEmail: currentUser?.email,
-                    //  : ride?.negotiator?.email,
                     providerName: ride?.driver?.fullName,
                     providerEmail: ride?.driver?.email,
                   },
@@ -383,7 +381,7 @@ export default function RideDetailsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* DRIVER IDENTITY CARD */}
+        {/* DRIVER IDENTITY CARD - WITH PROFILE IMAGE OR INITIALS */}
         <View
           style={[
             styles.profileCard,
@@ -391,16 +389,24 @@ export default function RideDetailsScreen() {
           ]}
         >
           <View style={styles.driverMetaBlock}>
-            <View
-              style={[
-                styles.avatarFallback,
-                { backgroundColor: colors.primary },
-              ]}
-            >
-              <AppText size={20} weight="bold" color="#FFF">
-                {displayDriverName.slice(0, 2).toUpperCase()}
-              </AppText>
-            </View>
+            {ride?.driver?.profileImage ? (
+              <Image
+                source={{ uri: ride.driver.profileImage }}
+                style={styles.driverAvatarImage}
+              />
+            ) : (
+              <View
+                style={[
+                  styles.avatarFallback,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
+                <AppText size={20} weight="bold" color="#FFF">
+                  {getInitials(displayDriverName)}
+                </AppText>
+              </View>
+            )}
+
             <View style={{ flex: 1 }}>
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
@@ -415,7 +421,7 @@ export default function RideDetailsScreen() {
                 color={colors.textMuted}
                 style={{ marginTop: 2 }}
               >
-                Verified Fleet Captain
+                Verified
               </AppText>
             </View>
           </View>
@@ -675,6 +681,11 @@ const styles = StyleSheet.create({
   },
   profileCard: { padding: 16, borderRadius: 20, borderWidth: 1, gap: 14 },
   driverMetaBlock: { flexDirection: "row", alignItems: "center", gap: 12 },
+  driverAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
   avatarFallback: {
     width: 48,
     height: 48,
