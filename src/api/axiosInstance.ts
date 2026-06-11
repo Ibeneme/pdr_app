@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { getAuthToken } from './secureStore';
 
-export const baseURL = 'http://localhost:5005'
+export const baseURL = 'https://kindred-server.onrender.com'
 
+//https://kindred-server.onrender.com
+// 'http://localhost:5005' 
 const axiosInstance = axios.create({
     baseURL: `${baseURL}/api/v1`,
     headers: {
