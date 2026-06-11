@@ -21,34 +21,16 @@ import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { AppDispatch } from "@/api/store";
-import { createParcelBooking } from "@/api/slices/parcel.slice";
+import { createJoinRide } from "@/api/slices/parcel.slice"; // Adjust path if needed
 import { NigeriaCitiesGrid } from "@/components/NigeriaCitiesGrid";
 import { AppText } from "@/components/AppText";
 
-export interface ParcelBooking {
+export interface JoinRideData {
   _id: string;
   requestedBy: string | any;
   route: {
     pickupAddress: string;
     deliveryAddress: string;
-  };
-  parties: {
-    sender: {
-      fullName: string;
-      contact: string;
-    };
-    recipient: {
-      fullName: string;
-      contact: string;
-    };
-  };
-  item: {
-    name: string;
-    properties: {
-      isFragile: boolean;
-      isPerishable: boolean;
-      isInsured: boolean;
-    };
   };
   schedule: {
     type: string;
@@ -60,7 +42,7 @@ export interface ParcelBooking {
   updatedAt: string;
 }
 
-export default function BookParcelDeliveryScreen() {
+export default function JoinRideScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
@@ -73,15 +55,7 @@ export default function BookParcelDeliveryScreen() {
   const [pickupAddress, setPickupAddress] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
 
-  const [senderName, setSenderName] = useState("");
-  const [senderContact, setSenderContact] = useState("");
-  const [recipientName, setRecipientName] = useState("");
-  const [recipientContact, setRecipientContact] = useState("");
-
-  const [itemName, setItemName] = useState("");
-  const [isFragile, setIsFragile] = useState(false);
-  const [isPerishable, setIsPerishable] = useState(false);
-  const [isInsured, setIsInsured] = useState(false);
+  const [notes, setNotes] = useState("");
 
   // Dispatch Date Configurations
   const [dispatchDate, setDispatchDate] = useState(new Date());
@@ -108,16 +82,8 @@ export default function BookParcelDeliveryScreen() {
   };
 
   const handleOpenOverview = () => {
-    if (
-      !pickupAddress.trim() ||
-      !deliveryAddress.trim() ||
-      !senderName.trim() ||
-      !senderContact.trim() ||
-      !recipientName.trim() ||
-      !recipientContact.trim() ||
-      !itemName.trim()
-    ) {
-      setError("Please fill out all missing details before continuing.");
+    if (!pickupAddress.trim() || !deliveryAddress.trim()) {
+      setError("Please select both pickup and delivery locations.");
       setSubmissionStatus("error");
       setOverviewModalVisible(true);
       return;
@@ -129,28 +95,10 @@ export default function BookParcelDeliveryScreen() {
   };
 
   const handleConfirmSubmit = async () => {
-    const parcelPayload: Partial<ParcelBooking> = {
+    const joinRidePayload: Partial<JoinRideData> = {
       route: {
         pickupAddress,
         deliveryAddress,
-      },
-      parties: {
-        sender: {
-          fullName: senderName,
-          contact: senderContact,
-        },
-        recipient: {
-          fullName: recipientName,
-          contact: recipientContact,
-        },
-      },
-      item: {
-        name: itemName,
-        properties: {
-          isFragile,
-          isPerishable,
-          isInsured,
-        },
       },
       schedule: {
         type: isImpromptu ? "immediate" : "scheduled",
@@ -159,23 +107,23 @@ export default function BookParcelDeliveryScreen() {
           : dispatchDate.toISOString(),
       },
       status: "pending",
-      notes: "Parcel booked via mobile app",
+      notes: notes.trim() || "Joining ride via mobile app",
     };
 
     setLoading(true);
     setError(null);
 
     try {
-      const resultAction = await dispatch(createParcelBooking(parcelPayload));
+      const resultAction = await dispatch(createJoinRide(joinRidePayload));
 
-      if (createParcelBooking.fulfilled.match(resultAction)) {
+      if (createJoinRide.fulfilled.match(resultAction)) {
         setSubmissionStatus("success");
       } else {
         setSubmissionStatus("error");
-        setError("We couldn't save your delivery request. Please try again.");
+        setError("We couldn't create your ride request. Please try again.");
       }
     } catch (err) {
-      console.error("[FORM SUBMIT]", err);
+      console.error("[JOIN RIDE SUBMIT]", err);
       setSubmissionStatus("error");
       setError("Something went wrong on our end. Please try again.");
     } finally {
@@ -221,7 +169,7 @@ export default function BookParcelDeliveryScreen() {
             </AppText>
           </TouchableOpacity>
           <AppText style={[styles.brandText, { color: theme.text }]}>
-            Send a Delivery
+            Join a Ride
           </AppText>
           <View style={{ width: 42 }} />
         </View>
@@ -240,7 +188,7 @@ export default function BookParcelDeliveryScreen() {
         >
           {/* SECTION 1: ROUTE LOCATIONS */}
           <AppText style={[styles.sectionTitle, { color: theme.textMuted }]}>
-            DELIVERY ROUTE
+            YOUR ROUTE
           </AppText>
 
           <TouchableOpacity
@@ -258,7 +206,7 @@ export default function BookParcelDeliveryScreen() {
                 { color: pickupAddress ? theme.text : theme.textMuted },
               ]}
             >
-              {pickupAddress || "Where should we pick up from?"}
+              {pickupAddress || "Pickup Location"}
             </AppText>
             <AppText
               style={{ fontSize: 12, color: theme.primary, fontWeight: "bold" }}
@@ -282,7 +230,7 @@ export default function BookParcelDeliveryScreen() {
                 { color: deliveryAddress ? theme.text : theme.textMuted },
               ]}
             >
-              {deliveryAddress || "Where should we deliver to?"}
+              {deliveryAddress || "Destination"}
             </AppText>
             <AppText
               style={{ fontSize: 12, color: theme.primary, fontWeight: "bold" }}
@@ -291,197 +239,46 @@ export default function BookParcelDeliveryScreen() {
             </AppText>
           </TouchableOpacity>
 
-          {/* SECTION 2: SENDER DETAILS */}
+          {/* NOTES */}
           <AppText
             style={[
               styles.sectionTitle,
               { color: theme.textMuted, marginTop: 14 },
             ]}
           >
-            SENDER INFORMATION
-          </AppText>
-          <View style={styles.gridContainer}>
-            <View
-              style={[
-                styles.flexInputWrapper,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <TextInput
-                placeholder="Your Name"
-                placeholderTextColor={theme.textMuted}
-                style={[styles.flexTextInput, { color: theme.text }]}
-                value={senderName}
-                onChangeText={setSenderName}
-              />
-            </View>
-            <View
-              style={[
-                styles.flexInputWrapper,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <TextInput
-                placeholder="Phone Number"
-                placeholderTextColor={theme.textMuted}
-                keyboardType="phone-pad"
-                style={[styles.flexTextInput, { color: theme.text }]}
-                value={senderContact}
-                onChangeText={setSenderContact}
-              />
-            </View>
-          </View>
-
-          {/* SECTION 3: RECIPIENT DETAILS */}
-          <AppText
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 6 },
-            ]}
-          >
-            RECIPIENT INFORMATION
-          </AppText>
-          <View style={styles.gridContainer}>
-            <View
-              style={[
-                styles.flexInputWrapper,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <TextInput
-                placeholder="Receiver's Name"
-                placeholderTextColor={theme.textMuted}
-                style={[styles.flexTextInput, { color: theme.text }]}
-                value={recipientName}
-                onChangeText={setRecipientName}
-              />
-            </View>
-            <View
-              style={[
-                styles.flexInputWrapper,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <TextInput
-                placeholder="Phone Number"
-                placeholderTextColor={theme.textMuted}
-                keyboardType="phone-pad"
-                style={[styles.flexTextInput, { color: theme.text }]}
-                value={recipientContact}
-                onChangeText={setRecipientContact}
-              />
-            </View>
-          </View>
-
-          {/* SECTION 4: ITEM DESCRIPTION */}
-          <AppText
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 14 },
-            ]}
-          >
-            ITEM DETAILS
+            ADDITIONAL NOTES
           </AppText>
           <View
             style={[
               styles.inputContainer,
-              { backgroundColor: theme.surface, borderColor: theme.border },
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+                height: 100,
+              },
             ]}
           >
             <TextInput
-              placeholder="What are you sending? (e.g. Documents, Clothes)"
+              placeholder="Any special requests? (e.g. number of passengers, luggage, etc.)"
               placeholderTextColor={theme.textMuted}
-              style={[styles.textInput, { color: theme.text }]}
-              value={itemName}
-              onChangeText={setItemName}
+              style={[
+                styles.textInput,
+                { color: theme.text, height: 90, textAlignVertical: "top" },
+              ]}
+              value={notes}
+              onChangeText={setNotes}
+              multiline
             />
           </View>
 
-          {/* SECTION 5: TOGGLE PREFERENCES */}
+          {/* SECTION: DISPATCH SCHEDULER */}
           <AppText
             style={[
               styles.sectionTitle,
               { color: theme.textMuted, marginTop: 14 },
             ]}
           >
-            SPECIAL HANDLING
-          </AppText>
-          <View
-            style={[
-              styles.toggleBlockCard,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-          >
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleTextContent}>
-                <AppText style={[styles.toggleTitle, { color: theme.text }]}>
-                  Fragile Item
-                </AppText>
-                <AppText
-                  style={[styles.toggleDesc, { color: theme.textMuted }]}
-                >
-                  Needs gentle handling and extra care
-                </AppText>
-              </View>
-              <Switch
-                value={isFragile}
-                onValueChange={setIsFragile}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={Platform.OS === "android" ? "#FFFFFF" : undefined}
-              />
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleTextContent}>
-                <AppText style={[styles.toggleTitle, { color: theme.text }]}>
-                  Perishable Item
-                </AppText>
-                <AppText
-                  style={[styles.toggleDesc, { color: theme.textMuted }]}
-                >
-                  Spoils easily or time-sensitive
-                </AppText>
-              </View>
-              <Switch
-                value={isPerishable}
-                onValueChange={setIsPerishable}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={Platform.OS === "android" ? "#FFFFFF" : undefined}
-              />
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-            {/* <View style={styles.toggleRow}>
-              <View style={styles.toggleTextContent}>
-                <AppText style={[styles.toggleTitle, { color: theme.text }]}>
-                  Insured Item
-                </AppText>
-                <AppText
-                  style={[styles.toggleDesc, { color: theme.textMuted }]}
-                >
-                  Protect against loss or damage
-                </AppText>
-              </View>
-              <Switch
-                value={isInsured}
-                onValueChange={setIsInsured}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={Platform.OS === "android" ? "#FFFFFF" : undefined}
-              />
-            </View> */}
-          </View>
-
-          {/* SECTION 6: DISPATCH SCHEDULER */}
-          <AppText
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 14 },
-            ]}
-          >
-            WHEN SHOULD WE SEND IT?
+            WHEN DO YOU WANT TO TRAVEL?
           </AppText>
           <View style={styles.gridContainer}>
             <TouchableOpacity
@@ -500,7 +297,7 @@ export default function BookParcelDeliveryScreen() {
                   { color: isImpromptu ? "#FFFFFF" : theme.text },
                 ]}
               >
-                Send Now
+                Leave Now
               </AppText>
             </TouchableOpacity>
 
@@ -523,9 +320,7 @@ export default function BookParcelDeliveryScreen() {
                   { color: !isImpromptu ? "#FFFFFF" : theme.text },
                 ]}
               >
-                {isImpromptu
-                  ? "Schedule Later"
-                  : dispatchDate.toLocaleDateString()}
+                {isImpromptu ? "Schedule" : dispatchDate.toLocaleDateString()}
               </AppText>
             </TouchableOpacity>
           </View>
@@ -555,7 +350,7 @@ export default function BookParcelDeliveryScreen() {
                       fontWeight: "bold",
                     }}
                   >
-                    Select Date
+                    Done
                   </AppText>
                 </TouchableOpacity>
               )}
@@ -566,19 +361,23 @@ export default function BookParcelDeliveryScreen() {
           <TouchableOpacity
             style={[
               styles.primarySubmitButton,
-              { backgroundColor: theme.primary, marginTop: 20 },
+              {
+                backgroundColor: theme.primary,
+                marginTop: 30,
+                marginBottom: 20,
+              },
             ]}
             onPress={handleOpenOverview}
             activeOpacity={0.85}
           >
             <AppText style={styles.submitButtonText}>
-              Review Order Summary
+              Review & Join Ride
             </AppText>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ====================== GEOGRAPHIC CITIES CONFIGURATOR MODAL ====================== */}
+      {/* ====================== LOCATION MODAL ====================== */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -612,8 +411,8 @@ export default function BookParcelDeliveryScreen() {
             >
               Select{" "}
               {locationSelectionTarget === "PICKUP"
-                ? "Pickup Hub"
-                : "Delivery Hub"}
+                ? "Pickup Location"
+                : "Destination"}
             </AppText>
             <AppText
               style={{
@@ -623,7 +422,7 @@ export default function BookParcelDeliveryScreen() {
                 marginBottom: 12,
               }}
             >
-              Choose a specific city center or state logistical point.
+              Choose a city center or logistical point
             </AppText>
 
             <View style={{ flex: 1 }}>
@@ -682,7 +481,7 @@ export default function BookParcelDeliveryScreen() {
             {submissionStatus === "idle" && (
               <View>
                 <AppText style={[styles.modalTitle, { color: theme.text }]}>
-                  Order Summary
+                  Ride Request Summary
                 </AppText>
 
                 <View
@@ -694,51 +493,33 @@ export default function BookParcelDeliveryScreen() {
                   <AppText
                     style={[styles.summaryItemText, { color: theme.text }]}
                   >
-                    <AppText style={{ color: theme.textMuted }}>Item:</AppText>{" "}
-                    {itemName || "Not specified"}
+                    <AppText style={{ color: theme.textMuted }}>From:</AppText>{" "}
+                    {pickupAddress || "Not selected"}
                   </AppText>
                   <AppText
                     style={[styles.summaryItemText, { color: theme.text }]}
                   >
-                    <AppText style={{ color: theme.textMuted }}>Route:</AppText>{" "}
-                    {pickupAddress || "Empty"} ➔ {deliveryAddress || "Empty"}
+                    <AppText style={{ color: theme.textMuted }}>To:</AppText>{" "}
+                    {deliveryAddress || "Not selected"}
                   </AppText>
                   <AppText
                     style={[styles.summaryItemText, { color: theme.text }]}
                   >
-                    <AppText style={{ color: theme.textMuted }}>
-                      Sender:
-                    </AppText>{" "}
-                    {senderName} ({senderContact})
-                  </AppText>
-                  <AppText
-                    style={[styles.summaryItemText, { color: theme.text }]}
-                  >
-                    <AppText style={{ color: theme.textMuted }}>
-                      Receiver:
-                    </AppText>{" "}
-                    {recipientName} ({recipientContact})
-                  </AppText>
-                  <AppText
-                    style={[styles.summaryItemText, { color: theme.text }]}
-                  >
-                    <AppText style={{ color: theme.textMuted }}>
-                      Handling:
-                    </AppText>{" "}
-                    {isFragile ? "Fragile" : ""}{" "}
-                    {isPerishable ? "Perishable" : ""}{" "}
-                    {isInsured ? "Insured" : ""}
-                  </AppText>
-                  <AppText
-                    style={[styles.summaryItemText, { color: theme.text }]}
-                  >
-                    <AppText style={{ color: theme.textMuted }}>
-                      Delivery Time:
-                    </AppText>{" "}
+                    <AppText style={{ color: theme.textMuted }}>When:</AppText>{" "}
                     {isImpromptu
-                      ? "As soon as possible (Now)"
+                      ? "As soon as possible"
                       : dispatchDate.toDateString()}
                   </AppText>
+                  {notes.trim() && (
+                    <AppText
+                      style={[styles.summaryItemText, { color: theme.text }]}
+                    >
+                      <AppText style={{ color: theme.textMuted }}>
+                        Notes:
+                      </AppText>{" "}
+                      {notes}
+                    </AppText>
+                  )}
                 </View>
 
                 <TouchableOpacity
@@ -753,7 +534,7 @@ export default function BookParcelDeliveryScreen() {
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <AppText style={styles.submitButtonText}>
-                      Confirm and Book Order
+                      Confirm & Request to Join
                     </AppText>
                   )}
                 </TouchableOpacity>
@@ -781,13 +562,13 @@ export default function BookParcelDeliveryScreen() {
                 <AppText
                   style={[styles.statusTitleText, { color: theme.text }]}
                 >
-                  Delivery Booked Successfully!
+                  Ride Request Created!
                 </AppText>
                 <AppText
                   style={[styles.statusBodyText, { color: theme.textMuted }]}
                 >
-                  Your delivery has been logged. You can now track your rider
-                  and package details.
+                  Your request to join a ride has been submitted. We'll match
+                  you with available drivers soon.
                 </AppText>
 
                 <TouchableOpacity
@@ -801,7 +582,7 @@ export default function BookParcelDeliveryScreen() {
                   ]}
                   onPress={() => {
                     setOverviewModalVisible(false);
-                    router.push("/(features)/drivers_menu");
+                    router.push("/(features)/join_ride"); // Adjust navigation as needed
                   }}
                 >
                   <AppText
@@ -810,7 +591,7 @@ export default function BookParcelDeliveryScreen() {
                       { color: theme.background },
                     ]}
                   >
-                    Go to Available Drivers
+                    Browse Available Rides
                   </AppText>
                 </TouchableOpacity>
               </View>
@@ -837,13 +618,12 @@ export default function BookParcelDeliveryScreen() {
                 <AppText
                   style={[styles.statusTitleText, { color: theme.text }]}
                 >
-                  Something Went Wrong
+                  Request Failed
                 </AppText>
                 <AppText
                   style={[styles.statusBodyText, { color: theme.textMuted }]}
                 >
-                  {error ||
-                    "We couldn't set up your delivery. Please verify form details."}
+                  {error || "Please check your details and try again."}
                 </AppText>
 
                 <TouchableOpacity
@@ -860,9 +640,7 @@ export default function BookParcelDeliveryScreen() {
                     setSubmissionStatus("idle");
                   }}
                 >
-                  <AppText style={styles.submitButtonText}>
-                    Check Fields and Fix
-                  </AppText>
+                  <AppText style={styles.submitButtonText}>Try Again</AppText>
                 </TouchableOpacity>
               </View>
             )}
@@ -917,7 +695,6 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    height: 54,
     borderRadius: 16,
     borderWidth: 1,
     paddingHorizontal: 16,
@@ -941,33 +718,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     gap: 12,
   },
-  flexInputWrapper: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    height: 52,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-  },
-  flexTextInput: { flex: 1, fontSize: 15 },
-  toggleBlockCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-  },
-  toggleTextContent: { flex: 1, paddingRight: 8 },
-  toggleTitle: { fontSize: 16, marginBottom: 2, fontWeight: "bold" },
-  toggleDesc: { fontSize: 14, lineHeight: 14 },
-  divider: { height: 1, width: "100%" },
   selectableTab: {
     flex: 1,
     height: 50,

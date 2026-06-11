@@ -99,7 +99,7 @@ export default function HomeScreen() {
         router.push("/(features)/send_parcel");
         break;
       case "JOIN_RIDE":
-        router.push("/(features)/join_ride");
+        router.push("/(features)/join");
         break;
       case "OFFER_RIDE":
         router.push("/(features)/offer-ride");
@@ -207,13 +207,13 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {(userError || notifError) && (
+      {/* {(userError || notifError) && (
         <View style={styles.infoMessageWrapper}>
           <AppText size={13} color="red">
             Error handling system synchronization context.
           </AppText>
         </View>
-      )}
+      )} */}
 
       {/* --- MAIN CONTENT --- */}
       <ScrollView

@@ -32,7 +32,7 @@ import {
   fetchWallet,
   fetchBankList,
   requestWithdrawal,
-  resolveAccount, // Added thunk import
+  resolveAccount,
 } from "@/api/slices/wallet.slice";
 
 export default function WithdrawScreen() {
@@ -41,9 +41,8 @@ export default function WithdrawScreen() {
 
   // Redux Hook Allocations
   const dispatch = useDispatch<AppDispatch>();
-  const { balance, bankList, isLoading } = useSelector(
-    (state: RootState) => state.wallet
-  );
+  const { balance, withdrawableBalance, earnings, bankList, isLoading } =
+    useSelector((state: RootState) => state.wallet);
 
   // Form Controlled Input Fields
   const [amount, setAmount] = useState("");
@@ -51,7 +50,7 @@ export default function WithdrawScreen() {
   const [selectedBankName, setSelectedBankName] = useState("Select a Bank");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
-  const [isResolving, setIsResolving] = useState(false); // Internal indicator tracking account verification
+  const [isResolving, setIsResolving] = useState(false);
 
   // Search Query State for Bank Picker
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,44 +69,50 @@ export default function WithdrawScreen() {
   }, [dispatch]);
 
   // Hook watching input rules to fire off account verification hooks automatically
-// Hook watching input rules to fire off account verification hooks automatically
-useEffect(() => {
-  const autoResolveBankDetails = async () => {
-    console.log(`🔍 [BANK_RESOLVER] Triggered. AccNum: ${accountNumber}, BankCode: ${selectedBankCode}`);
-
-    if (accountNumber.length === 10 && selectedBankCode) {
-      setIsResolving(true);
-      setAccountName(""); 
-
-      console.log(`🚀 [BANK_RESOLVER] Dispatching resolveAccount...`);
-
-      const resultAction = await dispatch(
-        resolveAccount({ accountNumber, bankCode: selectedBankCode })
+  useEffect(() => {
+    const autoResolveBankDetails = async () => {
+      console.log(
+        `🔍 [BANK_RESOLVER] Triggered. AccNum: ${accountNumber}, BankCode: ${selectedBankCode}`
       );
 
-      setIsResolving(false);
+      if (accountNumber.length === 10 && selectedBankCode) {
+        setIsResolving(true);
+        setAccountName("");
 
-      if (resolveAccount.fulfilled.match(resultAction)) {
-        console.log(`✅ [BANK_RESOLVER_SUCCESS] Server returned:`, resultAction.payload);
-        setAccountName(resultAction.payload.accountName);
+        console.log(`🚀 [BANK_RESOLVER] Dispatching resolveAccount...`);
+
+        const resultAction = await dispatch(
+          resolveAccount({ accountNumber, bankCode: selectedBankCode })
+        );
+
+        setIsResolving(false);
+
+        if (resolveAccount.fulfilled.match(resultAction)) {
+          console.log(
+            `✅ [BANK_RESOLVER_SUCCESS] Server returned:`,
+            resultAction.payload
+          );
+          setAccountName(resultAction.payload.accountName);
+        } else {
+          const errorMsg = (resultAction.payload as string) || "Unknown error";
+          console.error(`❌ [BANK_RESOLVER_ERROR] Failed:`, errorMsg);
+          triggerModal("error", "Account Verification Failed", errorMsg);
+        }
       } else {
-        // Extract error payload
-        const errorMsg = (resultAction.payload as string) || "Unknown error";
-        
-        console.error(`❌ [BANK_RESOLVER_ERROR] Failed:`, errorMsg);
-
-        triggerModal("error", "Account Verification Failed", errorMsg);
+        setAccountName("");
       }
-    } else {
-      if (accountNumber.length > 0) {
-         console.log(`⏳ [BANK_RESOLVER] Waiting for valid criteria... (Len: ${accountNumber.length})`);
-      }
-      setAccountName("");
-    }
-  };
+    };
 
-  autoResolveBankDetails();
-}, [accountNumber, selectedBankCode, dispatch]);
+    autoResolveBankDetails();
+  }, [accountNumber, selectedBankCode, dispatch]);
+
+  // Calculate total values wrapped in escrow holdings
+  const pendingEscrowAmount = useMemo(() => {
+    if (!earnings || !Array.isArray(earnings)) return 0;
+    return earnings
+      .filter((e: any) => e.status === "pending")
+      .reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+  }, [earnings]);
 
   // Performance-optimized localized client filter for the banks list
   const filteredBanks = useMemo(() => {
@@ -128,10 +133,16 @@ useEffect(() => {
     setModalVisible(true);
   };
 
+  const handleModalClose = () => {
+    setModalVisible(false);
+    if (modalType === "success") {
+      router.back();
+    }
+  };
+
   const handleWithdraw = async () => {
     const numericAmount = parseInt(amount, 10);
 
-    // Frontend Validations Rules
     if (!amount || isNaN(numericAmount) || numericAmount <= 0) {
       triggerModal(
         "error",
@@ -140,11 +151,11 @@ useEffect(() => {
       );
       return;
     }
-    if (numericAmount > balance) {
+    if (numericAmount > withdrawableBalance) {
       triggerModal(
         "error",
-        "Insufficient Funds",
-        `You cannot withdraw more than your available ledger balance of ₦${balance.toLocaleString()}.`
+        "Insufficient Withdrawable Balance",
+        `Your active withdrawable balance is ₦${withdrawableBalance.toLocaleString()}. The rest of your total funds are locked in escrow.`
       );
       return;
     }
@@ -173,7 +184,6 @@ useEffect(() => {
       return;
     }
 
-    // Packaging structural data format matching backend requirements
     const payload = {
       amount: numericAmount,
       bankDetails: {
@@ -183,7 +193,6 @@ useEffect(() => {
       },
     };
 
-    // Dispatch asynchronous reduction operation
     const resultAction = await dispatch(requestWithdrawal(payload));
 
     if (requestWithdrawal.fulfilled.match(resultAction)) {
@@ -200,22 +209,22 @@ useEffect(() => {
     }
   };
 
-  const handleModalClose = () => {
-    setModalVisible(false);
-    if (modalType === "success") {
-      router.back();
-    }
-  };
-
   const selectBankInstance = (name: string, code: string) => {
     setSelectedBankName(name);
     setSelectedBankCode(code);
-    setSearchQuery(""); // Reset search on choose
+    setSearchQuery("");
     setBankPickerVisible(false);
   };
 
-  // Determine if confirm action requirements are active or processing dependencies
-  const isButtonDisabled = isLoading || isResolving || !accountName.trim();
+  // UI Checks and State Enforcements
+  const parsedAmount = parseInt(amount, 10) || 0;
+  const isExceedingWithdrawable = parsedAmount > withdrawableBalance;
+  const isButtonDisabled =
+    isLoading ||
+    isResolving ||
+    !accountName.trim() ||
+    isExceedingWithdrawable ||
+    parsedAmount <= 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -240,11 +249,9 @@ useEffect(() => {
           >
             <ArrowLeft size={22} color={colors.text} />
           </TouchableOpacity>
-
           <AppText size={18} weight="bold" color={colors.text}>
             Withdraw Funds
           </AppText>
-
           <View style={{ width: 44 }} />
         </View>
       </SafeAreaView>
@@ -254,36 +261,107 @@ useEffect(() => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Balance Display Layout */}
+        {/* Dynamic Multi-Balance Display Matrix */}
         <View
           style={[
-            styles.balanceCard,
+            styles.mainBalanceCard,
             { backgroundColor: colors.surface, borderColor: colors.border },
           ]}
         >
-          <AppText size={13} color={colors.textMuted} weight="medium">
-            AVAILABLE BALANCE
+          <AppText
+            size={12}
+            color={colors.primary}
+            weight="bold"
+            style={{ letterSpacing: 0.8 }}
+          >
+            WITHDRAWABLE AVAILABLE BALANCE
           </AppText>
           <AppText
-            size={38}
+            size={40}
             weight="bold"
             color={colors.text}
             style={{ marginTop: 6 }}
           >
-            ₦{balance.toLocaleString()}
+            ₦{withdrawableBalance.toLocaleString()}
           </AppText>
-          <AppText size={12} color={colors.textMuted} style={{ marginTop: 6 }}>
-            Padiman Route • Instant Processing
-          </AppText>
+
+          <View
+            style={[styles.balanceDivider, { backgroundColor: colors.border }]}
+          />
+
+          <View style={styles.subBalanceGrid}>
+            <View style={styles.subBalanceItem}>
+              <AppText size={11} color={colors.textMuted} weight="medium">
+                TOTAL WALLET VALUE
+              </AppText>
+              <AppText
+                size={15}
+                weight="bold"
+                color={colors.text}
+                style={{ marginTop: 2 }}
+              >
+                ₦{balance.toLocaleString()}
+              </AppText>
+            </View>
+
+            <View
+              style={[
+                styles.verticalDivider,
+                { backgroundColor: colors.border },
+              ]}
+            />
+
+            <View style={styles.subBalanceItem}>
+              <AppText size={11} color="#D97706" weight="medium">
+                LOCKED IN ESCROW
+              </AppText>
+              <AppText
+                size={15}
+                weight="bold"
+                color="#D97706"
+                style={{ marginTop: 2 }}
+              >
+                ₦{pendingEscrowAmount.toLocaleString()}
+              </AppText>
+            </View>
+          </View>
         </View>
+
+        {isExceedingWithdrawable && (
+          <View
+            style={[
+              styles.errorAlertBanner,
+              {
+                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                borderColor: "#EF4444",
+              },
+            ]}
+          >
+            <AlertCircle size={16} color="#EF4444" />
+            <AppText
+              size={12}
+              color="#EF4444"
+              weight="medium"
+              style={{ marginLeft: 8, flex: 1 }}
+            >
+              Amount exceeds your clear payout limits. ₦
+              {pendingEscrowAmount.toLocaleString()} is currently locked safely
+              in escrow.
+            </AppText>
+          </View>
+        )}
 
         <AppText
           size={12}
           weight="bold"
-          color={colors.primary}
-          style={{ marginBottom: 12, letterSpacing: 0.5 }}
+          color={colors.textMuted}
+          style={{
+            marginBottom: 12,
+            letterSpacing: 0.5,
+            textTransform: "uppercase",
+          }}
         >
-          WITHDRAWAL DETAILS
+          WITHDRAWAL CONFIGURATION
         </AppText>
 
         <View
@@ -317,7 +395,7 @@ useEffect(() => {
             onChangeText={setAmount}
           />
 
-          {/* Custom Select Bank Trigger Dropdown Menu Layout */}
+          {/* Bank Picker Dropdown */}
           <AppText
             size={13}
             weight="medium"
@@ -383,7 +461,7 @@ useEffect(() => {
               style={[
                 styles.input,
                 {
-                  backgroundColor: isDark ? "#1f1f1f" : "#f5f5f5", // visually indicate a read-only field
+                  backgroundColor: isDark ? "#1f1f1f" : "#f5f5f5",
                   color: colors.text,
                   borderColor: colors.border,
                   paddingRight: 40,
@@ -392,7 +470,7 @@ useEffect(() => {
               placeholder="Auto-populated holder name"
               placeholderTextColor={colors.textMuted}
               value={accountName}
-              editable={false} // Managed solely through automated Paystack queries
+              editable={false}
             />
             {isResolving && (
               <ActivityIndicator
@@ -404,8 +482,8 @@ useEffect(() => {
           </View>
         </View>
 
-        {/* Dynamic Summary Cards calculations rendering checks */}
-        {amount && !isNaN(parseInt(amount, 10)) ? (
+        {/* Summary Card */}
+        {amount && !isNaN(parsedAmount) ? (
           <View
             style={[
               styles.summaryCard,
@@ -419,26 +497,25 @@ useEffect(() => {
               <AppText size={14} color={colors.textMuted}>
                 Amount
               </AppText>
-              <AppText size={15} weight="bold" color={colors.text}>
-                ₦{parseInt(amount, 10).toLocaleString()}
+              <AppText
+                size={15}
+                weight="bold"
+                color={isExceedingWithdrawable ? "#EF4444" : colors.text}
+              >
+                ₦{parsedAmount.toLocaleString()}
               </AppText>
             </View>
             <View style={styles.summaryRow}>
               <AppText size={14} color={colors.textMuted}>
                 Fee
               </AppText>
-              <AppText
-                size={14}
-                weight="medium"
-                color={colors.text || "#22c55e"}
-              >
+              <AppText size={14} weight="medium" color={colors.text}>
                 Free (First withdrawal)
               </AppText>
             </View>
           </View>
         ) : null}
 
-        {/* Conditional rendering for submit buttons / loaders states blocks */}
         <TouchableOpacity
           style={[
             styles.withdrawButton,
@@ -485,7 +562,7 @@ useEffect(() => {
         </View>
       </ScrollView>
 
-      {/* MODAL 1: Live Bank Picker Bottom Sheet + Integrated Search Bar */}
+      {/* MODAL 1: Bank Picker Bottom Sheet */}
       <Modal
         visible={bankPickerVisible}
         transparent
@@ -528,7 +605,6 @@ useEffect(() => {
                   </TouchableOpacity>
                 </View>
 
-                {/* Newly Added Search Bar Wrapper Component */}
                 <View
                   style={[
                     styles.searchBarContainer,
@@ -659,7 +735,6 @@ useEffect(() => {
                 >
                   {modalTitle}
                 </AppText>
-
                 <AppText
                   size={14}
                   color={colors.textMuted}
@@ -723,12 +798,38 @@ const styles = StyleSheet.create({
   },
   scrollView: { flex: 1 },
   scrollContent: { padding: 16 },
-  balanceCard: {
-    padding: 24,
+  mainBalanceCard: {
+    padding: 20,
     borderRadius: 20,
     borderWidth: 1,
     marginBottom: 24,
     alignItems: "center",
+  },
+  balanceDivider: {
+    height: 1,
+    width: "100%",
+    marginVertical: 16,
+  },
+  subBalanceGrid: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+  },
+  subBalanceItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  verticalDivider: {
+    width: 1,
+    height: 30,
+  },
+  errorAlertBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
   },
   formCard: {
     borderRadius: 20,
@@ -736,9 +837,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
   },
-  label: {
-    marginBottom: 6,
-  },
+  label: { marginBottom: 6 },
   input: {
     borderWidth: 1,
     borderRadius: 12,
@@ -768,19 +867,9 @@ const styles = StyleSheet.create({
     height: 44,
     marginBottom: 16,
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInputField: {
-    flex: 1,
-    fontSize: 14,
-    paddingVertical: 8,
-  },
-  bankItemRow: {
-    width: "100%",
-    paddingVertical: 14,
-    borderBottomWidth: 0.5,
-  },
+  searchIcon: { marginRight: 8 },
+  searchInputField: { flex: 1, fontSize: 14, paddingVertical: 8 },
+  bankItemRow: { width: "100%", paddingVertical: 14, borderBottomWidth: 0.5 },
   summaryCard: {
     padding: 16,
     borderRadius: 16,
@@ -789,8 +878,8 @@ const styles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     marginTop: 10,
+    justifyContent: "space-between",
   },
   withdrawButton: {
     height: 52,
@@ -806,7 +895,6 @@ const styles = StyleSheet.create({
     marginTop: 24,
     paddingHorizontal: 6,
   },
-  /* Bottom Sheet Styles */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -827,16 +915,8 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginBottom: 18,
   },
-  closeButton: {
-    position: "absolute",
-    right: 20,
-    top: 20,
-    padding: 4,
-  },
-  modalIconContainer: {
-    marginBottom: 16,
-    marginTop: 8,
-  },
+  closeButton: { position: "absolute", right: 20, top: 20, padding: 4 },
+  modalIconContainer: { marginBottom: 16, marginTop: 8 },
   modalButton: {
     width: "100%",
     height: 50,

@@ -46,6 +46,7 @@ export interface ResolvedAccount {
 
 interface WalletState {
     balance: number;
+    withdrawableBalance: number; // INTEGRATED: Withdrawable balance tracking property
     earnings: Earnings[];
     withdrawals: Withdrawal[];
     bankList: Bank[];
@@ -56,6 +57,7 @@ interface WalletState {
 
 const initialState: WalletState = {
     balance: 0,
+    withdrawableBalance: 0, // INTEGRATED: Initialized to baseline value
     earnings: [],
     withdrawals: [],
     bankList: [],
@@ -132,7 +134,7 @@ export const resolveAccount = createAsyncThunk<
     { accountNumber: string; bankCode: string },
     { rejectValue: string }
 >("wallet/resolveAccount", async ({ accountNumber, bankCode }, { rejectWithValue }) => {
-    
+
     console.log(`🔍 [RESOLVE_ACCOUNT_THUNK] Sending POST request...`);
 
     try {
@@ -218,6 +220,10 @@ const walletSlice = createSlice({
             .addCase(fetchWallet.fulfilled, (state, action) => {
                 state.isLoading = false;
                 state.balance = action.payload.balance;
+                // Safely maps withdrawable balance falling back to base balance if unavailable
+                state.withdrawableBalance = action.payload.withdrawableBalance !== undefined
+                    ? action.payload.withdrawableBalance
+                    : action.payload.balance;
                 state.earnings = action.payload.earnings || [];
                 state.withdrawals = action.payload.withdrawals || [];
             })
@@ -293,6 +299,9 @@ const walletSlice = createSlice({
                 state.isLoading = false;
                 if (action.payload?.wallet) {
                     state.balance = action.payload.wallet.balance;
+                    state.withdrawableBalance = action.payload.wallet.withdrawableBalance !== undefined
+                        ? action.payload.wallet.withdrawableBalance
+                        : action.payload.wallet.balance;
                     state.withdrawals = action.payload.wallet.withdrawals || [];
                 }
             })
@@ -322,6 +331,9 @@ const walletSlice = createSlice({
             .addCase(verifyAndTopUp.fulfilled, (state, action) => {
                 state.isLoading = false;
                 state.balance = action.payload.balance;
+                if (action.payload.withdrawableBalance !== undefined) {
+                    state.withdrawableBalance = action.payload.withdrawableBalance;
+                }
             })
             .addCase(verifyAndTopUp.rejected, (state, action) => {
                 state.isLoading = false;

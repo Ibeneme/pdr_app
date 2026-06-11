@@ -11,12 +11,20 @@ import {
   Modal,
   Platform,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/api/store";
 import { getAllRides } from "@/api/slices/ride.slice";
-import { ArrowLeft, Clock, User, MapPin, XCircle } from "lucide-react-native";
+import {
+  ArrowLeft,
+  Clock,
+  User,
+  MapPin,
+  XCircle,
+  Handshake,
+  CheckCircle2,
+} from "lucide-react-native";
 import { AppText } from "@/components/AppText";
 import { NigeriaCitiesGrid } from "@/components/NigeriaCitiesGrid";
 
@@ -38,13 +46,20 @@ interface AvailableRide {
   availableSeats: number;
   estimatedFare: number;
   rating?: string;
+  isNegotiator?: boolean;
+  myNegotiation?: {
+    status: string;
+    agreedAmount: number;
+    isConfirmed: boolean;
+    isPaid: boolean;
+  };
 }
 
 export default function JoinRideScreen() {
   const { theme: colors, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
-
+  const { id } = useLocalSearchParams<{ id?: string }>();
   // State
   const [rides, setRides] = useState<AvailableRide[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -86,7 +101,6 @@ export default function JoinRideScreen() {
     fetchRides(false);
   };
 
-  // Select Modal Hub Assignment
   const handleSelectCity = (cityName: string) => {
     if (citySelectorTarget === "PICKUP") {
       setFilterPickup(cityName);
@@ -96,7 +110,6 @@ export default function JoinRideScreen() {
     setCitySelectorTarget(null);
   };
 
-  // Double Gated Filtering Loop
   const filteredRides = rides.filter((ride: AvailableRide) => {
     const matchesPickup = filterPickup
       ? ride.pickupPoint.toLowerCase().includes(filterPickup.toLowerCase()) ||
@@ -129,8 +142,22 @@ export default function JoinRideScreen() {
         fare: ride.estimatedFare,
         time: ride.departureTime,
         seats: ride.availableSeats,
+        negotiatorService: id,
       },
+
+      
     });
+
+
+    // router.push({
+    //   pathname: "/(details)/details",
+    //   params: {
+    //     id: ride._id,
+    //     type: "parcelrequest",
+    //     negotiatorService: id,
+    //   },
+    // })
+
   };
 
   return (
@@ -162,7 +189,6 @@ export default function JoinRideScreen() {
           <View style={{ width: 44 }} />
         </View>
 
-        {/* ====================== DUAL CITY SELECTOR HEADER DOCK ====================== */}
         <View style={styles.filterDockRow}>
           <TouchableOpacity
             activeOpacity={0.8}
@@ -273,7 +299,6 @@ export default function JoinRideScreen() {
           contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
           refreshing={isRefreshing}
           onRefresh={handleRefresh}
-          // Dynamic Fallback Interface when array queries map out empty
           ListEmptyComponent={
             <View style={styles.emptyListStateFrame}>
               <XCircle size={48} color={colors.textMuted} strokeWidth={1.5} />
@@ -309,10 +334,29 @@ export default function JoinRideScreen() {
                   styles.driverMarketplaceCardBox,
                   {
                     backgroundColor: colors.surface,
-                    borderColor: colors.border,
+                    borderColor: item.isNegotiator
+                      ? colors.primary
+                      : colors.border,
+                    borderWidth: item.isNegotiator ? 1.5 : 1,
                   },
                 ]}
               >
+                {/* Visual indicator header card for active negotiations */}
+                {item.isNegotiator && (
+                  <View
+                    style={[
+                      styles.negotiationHeaderBadge,
+                      { backgroundColor: colors.primary + "15" },
+                    ]}
+                  >
+                    <Handshake size={14} color={colors.primary} />
+                    <AppText size={12} weight="bold" color={colors.primary}>
+                      Active Negotiation •{" "}
+                      {item.myNegotiation?.status || "Pending"}
+                    </AppText>
+                  </View>
+                )}
+
                 <View style={styles.cardProfileRowHeaderLayout}>
                   <View
                     style={{
@@ -341,21 +385,36 @@ export default function JoinRideScreen() {
                       )}
                     </View>
                     <View>
-                      <AppText size={15} weight="bold" color={colors.text}>
-                        {driverName}
-                      </AppText>
-                      <AppText size={12} color={colors.textMuted}>
-                        ⭐ {item.rating || "4.8"}{" "}
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <AppText size={15} weight="bold" color={colors.text}>
+                          {driverName}
+                        </AppText>
+                        {isVerified && (
+                          <CheckCircle2 size={14} color={colors.primary} />
+                        )}
+                      </View>
+                      {/* <AppText size={12} color={colors.textMuted}>
+                        ★ {item.rating || "4.8"}{" "}
                         {isVerified ? "• Verified Driver" : ""}
-                      </AppText>
+                      </AppText> */}
+
                     </View>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <AppText size={18} weight="bold" color={colors.primary}>
-                      ₦{item.estimatedFare}
+                      ₦
+                      {item.isNegotiator && item.myNegotiation?.agreedAmount
+                        ? item.myNegotiation.agreedAmount
+                        : item.estimatedFare}
                     </AppText>
                     <AppText size={11} color={colors.textMuted}>
-                      per seat
+                      {item.isNegotiator ? "offered fare" : "per seat"}
                     </AppText>
                   </View>
                 </View>
@@ -424,7 +483,7 @@ export default function JoinRideScreen() {
                     </View>
                   </View>
                   <AppText size={12} weight="bold" color={colors.primary}>
-                    Join Ride →
+                    {item.isNegotiator ? "View Offer →" : "Join Ride →"}
                   </AppText>
                 </View>
               </TouchableOpacity>
@@ -433,7 +492,6 @@ export default function JoinRideScreen() {
         />
       )}
 
-      {/* ====================== GEOGRAPHIC SUB-SELECTOR CORRIDOR MODAL ====================== */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -554,6 +612,16 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     marginBottom: 16,
+    overflow: "hidden",
+  },
+  negotiationHeaderBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 12,
   },
   cardProfileRowHeaderLayout: {
     flexDirection: "row",

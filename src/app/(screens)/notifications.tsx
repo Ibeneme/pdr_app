@@ -44,87 +44,87 @@ export default function NotificationsScreen() {
       dispatch(markNotificationAsRead(notification._id));
     }
 
-    // Extract custom nested data context payloads safely
-    const payloadData = notification?.data || {};
+    // // Extract custom nested data context payloads safely
+    // const payloadData = notification?.data || {};
 
-    if (notification.type === "WITHDRAWAL") {
-      return router.push("/(screens)/wallet");
-    }
+    // if (notification.type === "WITHDRAWAL") {
+    //   return router.push("/(screens)/wallet");
+    // }
 
-    // 2. Intercept PAYMENT type notifications to route using the transaction service properties
-    if (notification.type === "PAYMENT") {
-      const serviceId = payloadData.serviceId;
-      const serviceType = payloadData.serviceType;
+    // // 2. Intercept PAYMENT type notifications to route using the transaction service properties
+    // if (notification.type === "PAYMENT") {
+    //   const serviceId = payloadData.serviceId;
+    //   const serviceType = payloadData.serviceType;
 
-      console.log(
-        `🛎️ [PAYMENT ROUTING] Service ID: ${serviceId}, Type: ${serviceType}`
-      );
+    //   console.log(
+    //     `🛎️ [PAYMENT ROUTING] Service ID: ${serviceId}, Type: ${serviceType}`
+    //   );
 
-      if (!serviceId) {
-        console.warn(
-          "⚠️ Missing serviceId in payment notification context payload."
-        );
-        return;
-      }
+    //   if (!serviceId) {
+    //     console.warn(
+    //       "⚠️ Missing serviceId in payment notification context payload."
+    //     );
+    //     return;
+    //   }
 
-      // A. Route to Deliver a Parcel Screen Context
-      if (serviceType === "deliver_a_parcel") {
-        return router.push({
-          pathname: "/(details)/details",
-          params: { id: serviceId },
-        });
-      }
+    //   // A. Route to Deliver a Parcel Screen Context
+    //   if (serviceType === "deliver_a_parcel") {
+    //     return router.push({
+    //       pathname: "/(details)/details",
+    //       params: { id: serviceId },
+    //     });
+    //   }
 
-      // B. Route to Ride Offer / Ride Join Screen Context
-      if (serviceType === "ride_offer" || serviceType === "ride_join") {
-        return router.push({
-          pathname: "/(details)/ride",
-          params: {
-            id: serviceId,
-            driverName: payloadData.payerName || "Driver",
-            pickup: "View Details",
-            dropoff: "View Details",
-            fare: payloadData.amount || "",
-            seats: 1,
-          },
-        });
-      }
-    }
+    //   // B. Route to Ride Offer / Ride Join Screen Context
+    //   if (serviceType === "ride_offer" || serviceType === "ride_join") {
+    //     return router.push({
+    //       pathname: "/(details)/ride",
+    //       params: {
+    //         id: serviceId,
+    //         driverName: payloadData.payerName || "Driver",
+    //         pickup: "View Details",
+    //         dropoff: "View Details",
+    //         fare: payloadData.amount || "",
+    //         seats: 1,
+    //       },
+    //     });
+    //   }
+    // }
 
-    // =====================================================================
-    // 3. Fallback Routing Structure (For reference/orders/standard notifications)
-    // =====================================================================
-    const targetType = payloadData.type || notification.type;
-    const targetId =
-      payloadData.id || payloadData.serviceId || notification._id;
+    // // =====================================================================
+    // // 3. Fallback Routing Structure (For reference/orders/standard notifications)
+    // // =====================================================================
+    // const targetType = payloadData.type || notification.type;
+    // const targetId =
+    //   payloadData.id || payloadData.serviceId || notification._id;
 
-    if (
-      targetType === "ride_offer" ||
-      targetType === "ride_join" ||
-      notification.type === "RIDE"
-    ) {
-      return router.push({
-        pathname: "/(details)/ride",
-        params: {
-          id: targetId,
-          driverName:
-            payloadData.driverName || payloadData.driver?.name || "Driver",
-          driverPhone:
-            payloadData.driverPhone || payloadData.driver?.phone || "",
-          pickup: payloadData.pickupPoint || payloadData.pickup || "Details",
-          dropoff: payloadData.dropoffPoint || payloadData.dropoff || "Details",
-          fare: payloadData.amount || payloadData.fare || "",
-          time: payloadData.departureTime || "",
-          seats: payloadData.availableSeats || 1,
-        },
-      });
-    } else {
-      // General fallback to detail route mapping
-      return router.push({
-        pathname: "/(details)/details",
-        params: { id: targetId },
-      });
-    }
+    // if (
+    //   targetType === "ride_offer" ||
+    //   targetType === "ride_join" ||
+    //   notification.type === "RIDE"
+    // ) {
+    //   return router.push({
+    //     pathname: "/(details)/ride",
+    //     params: {
+    //       id: targetId,
+    //       driverName:
+    //         payloadData.driverName || payloadData.driver?.name || "Driver",
+    //       driverPhone:
+    //         payloadData.driverPhone || payloadData.driver?.phone || "",
+    //       pickup: payloadData.pickupPoint || payloadData.pickup || "Details",
+    //       dropoff: payloadData.dropoffPoint || payloadData.dropoff || "Details",
+    //       fare: payloadData.amount || payloadData.fare || "",
+    //       time: payloadData.departureTime || "",
+    //       seats: payloadData.availableSeats || 1,
+    //     },
+    //   });
+    // } else {
+    //   // General fallback to detail route mapping
+    //   return router.push({
+    //     pathname: "/(details)/details",
+    //     params: { id: targetId },
+    //   });
+    // }
   };
 
   const handleMarkAllAsRead = () => {

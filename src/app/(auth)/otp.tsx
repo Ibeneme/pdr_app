@@ -95,7 +95,7 @@ export default function OtpVerificationScreen() {
   const handleResend = async () => {
     setLoading(true);
     try {
-      await dispatch(sendOtp(email)).unwrap();
+      await dispatch(sendOtp({email})).unwrap();
       setTimer(120);
       setCanResend(false);
       triggerAlertModal(
@@ -268,7 +268,7 @@ export default function OtpVerificationScreen() {
             />
 
             <View style={styles.errorIconWrapper}>
-              <AlertCircle size={56} color="#EF5350" strokeWidth={2} />
+              <AlertCircle size={56} color={theme.primary} strokeWidth={2} />
             </View>
 
             <Text style={[styles.sheetTitle, { color: theme.text }]}>
@@ -280,7 +280,7 @@ export default function OtpVerificationScreen() {
             </Text>
 
             <TouchableOpacity
-              style={[styles.sheetBtn, { backgroundColor: "#EF5350" }]}
+              style={[styles.sheetBtn, { backgroundColor: theme.primary}]}
               onPress={() => setAlertDialogVisible(false)}
               activeOpacity={0.8}
             >
@@ -467,7 +467,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#EF5350",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 12,

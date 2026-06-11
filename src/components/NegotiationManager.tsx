@@ -92,7 +92,8 @@ export default function NegotiationManager({
   const executeDataSync = async () => {
     const updatedData: any = { status };
 
-    if (agreedAmount.trim() !== "") {
+    // Only allow syncing the price field if it wasn't already locked down initially
+    if (!isPriceLocked && agreedAmount.trim() !== "") {
       updatedData.agreedAmount = Number(agreedAmount);
     }
 
@@ -124,6 +125,15 @@ export default function NegotiationManager({
   }
 
   if (error || !currentNegotiation) return null;
+
+  // Evaluation matrices for disabling modifications
+  const isRideCompleted =
+    currentNegotiation?.status === "ride completed" ||
+    currentNegotiation?.status === "completed";
+
+  const isPriceLocked =
+    currentNegotiation?.agreedAmount !== undefined &&
+    Number(currentNegotiation.agreedAmount) > 0;
 
   return (
     <View style={styles.noPaddingWrapper}>
@@ -165,25 +175,19 @@ export default function NegotiationManager({
                 {STATUS_OPTIONS.map((item, index) => {
                   const isActive = status === item;
 
-                  const alternatingBasis =
-                    index % 3 === 0
-                      ? { flexBasis: "55%" }
-                      : index % 3 === 1
-                      ? { flexBasis: "38%" }
-                      : { flexBasis: "100%" };
-
                   return (
                     <TouchableOpacity
                       key={item}
-                      onPress={() => setStatus(item)}
+                      onPress={() => !isRideCompleted && setStatus(item)}
+                      disabled={isRideCompleted}
                       style={[
                         styles.masonryItem,
-                      
                         {
                           backgroundColor: isActive
                             ? theme.primary
                             : theme.background,
                           borderColor: isActive ? theme.primary : theme.border,
+                          opacity: isRideCompleted && !isActive ? 0.5 : 1,
                         },
                       ]}
                     >
@@ -207,7 +211,7 @@ export default function NegotiationManager({
                 color={theme.textMuted}
                 style={[styles.labelTitle, { marginTop: 20 }]}
               >
-                CONFIRM AGREED PRICE (₦)
+                CONFIRM AGREED PRICE (₦) {isPriceLocked && "• LOCKED"}
               </AppText>
               <View
                 style={[
@@ -216,10 +220,11 @@ export default function NegotiationManager({
                     backgroundColor: theme.background,
                     borderColor: theme.border,
                   },
+                  isPriceLocked && { opacity: 0.64 },
                 ]}
               >
                 <MaterialCommunityIcons
-                  name="cash"
+                  name={isPriceLocked ? "lock-outline" : "cash"}
                   size={24}
                   color={theme.textMuted}
                   style={{ marginRight: 10 }}
@@ -227,25 +232,32 @@ export default function NegotiationManager({
                 <TextInput
                   style={[
                     styles.textInput,
-                    { color: theme.text, fontSize: 22, fontWeight: "700" },
+                    {
+                      color: isPriceLocked ? theme.textMuted : theme.text,
+                      fontSize: 22,
+                      fontWeight: "700",
+                    },
                   ]}
                   value={agreedAmount}
                   onChangeText={setAgreedAmount}
                   keyboardType="numeric"
+                  editable={!isPriceLocked}
                   placeholder="0.00"
                   placeholderTextColor={theme.textMuted}
                 />
               </View>
 
-              {/* Action trigger -> Sets up Confirmation Overlay view */}
-              <TouchableOpacity
-                style={[styles.saveBtn, { backgroundColor: theme.primary }]}
-                onPress={() => setShowConfirmation(true)}
-              >
-                <AppText size={15} weight="bold" color="#FFF">
-                  Apply Action Changes
-                </AppText>
-              </TouchableOpacity>
+              {/* Action trigger -> Hidden completely when ride is completed */}
+              {!isRideCompleted && (
+                <TouchableOpacity
+                  style={[styles.saveBtn, { backgroundColor: theme.primary }]}
+                  onPress={() => setShowConfirmation(true)}
+                >
+                  <AppText size={15} weight="bold" color="#FFF">
+                    Apply Action Changes
+                  </AppText>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             /* LAYER TWO: BOTTOM SHEET CONFIRMATION SPLIT VIEW */
@@ -418,7 +430,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf:'center'
+    alignSelf: "center",
   },
   textCapitalize: {
     textTransform: "capitalize",

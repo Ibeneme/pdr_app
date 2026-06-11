@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Image,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useDispatch } from "react-redux";
 import {
@@ -22,65 +22,92 @@ import { AppDispatch } from "@/api/store";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components/AppText";
 
-
 export default function DriverMarketplaceScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
+  const { id } = useLocalSearchParams<{ id?: string }>();
 
-  // Local State Management
   const [parcels, setParcels] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [chatVisible, setChatVisible] = useState(false);
   const [selectedParcel, setSelectedParcel] = useState<any | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
 
-  // Fetch data
   useEffect(() => {
+    if (!id) {
+      console.error("No ID provided to DriverMarketplaceScreen");
+      return;
+    }
+
     setIsLoading(true);
-    dispatch(getAllGlobalRequests())
+    dispatch(getAllGlobalRequests(id))
       .unwrap()
-      .then((data: any) => {
-        const parcelData = data?.data || data || [];
-        setParcels(parcelData);
+      .then((response: any) => {
+        console.warn("API Response:", response);
+
+        let parcelData: any[] = [];
+
+        // Robust response handling
+        if (response?.success && Array.isArray(response.data)) {
+          parcelData = response.data;
+        } else if (Array.isArray(response)) {
+          parcelData = response;
+        } else if (response?.data) {
+          parcelData = Array.isArray(response.data)
+            ? response.data
+            : [response.data];
+        }
+
+        // Sort: Negotiations first, then newest
+        const sorted = [...parcelData].sort((a, b) => {
+          const aHasNeg = Boolean(a.isNegotiator);
+          const bHasNeg = Boolean(b.isNegotiator);
+          if (bHasNeg !== aHasNeg) return bHasNeg ? 1 : -1;
+          return (
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        });
+
+        setParcels(sorted);
       })
       .catch((err) => {
-        console.error("❌ [DriverMarketplaceScreen] Fetch failure:", err);
+        console.error("❌ Fetch failure:", err);
       })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, [dispatch]);
-
-  const handleOpenChat = (parcel: any) => {
-    setSelectedParcel(parcel);
-    const senderName = parcel.user?.fullName || "Customer";
-    setMessages([
-      {
-        id: "1",
-        sender: "driver",
-        text: `Hello! I can help move your parcel from ${parcel.pickupAddress} to ${parcel.destinationCity}.`,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      },
-    ]);
-    setChatVisible(true);
-  };
+      .finally(() => setIsLoading(false));
+  }, [dispatch, id]);
 
   const getInitials = (name: string = "Customer") => {
     const names = name.trim().split(" ");
-    if (names.length >= 2) {
-      return (names[0][0] + names[1][0]).toUpperCase();
-    }
-    return names[0].slice(0, 2).toUpperCase();
+    return names.length >= 2
+      ? (names[0][0] + names[1][0]).toUpperCase()
+      : names[0].slice(0, 2).toUpperCase();
+  };
+
+  const getNegotiationSummary = (parcel: any) => {
+    if (!parcel?.isNegotiator || !parcel?.negotiations?.length) return null;
+
+    const latest = [...parcel.negotiations].sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    )[0];
+
+    const otherParty =
+      latest.negotiator?._id === parcel.user?._id
+        ? latest.serviceProvider
+        : latest.negotiator;
+
+    return {
+      withUser: otherParty?.fullName || "Service Provider",
+      status: latest.status,
+      agreedAmount: latest.agreedAmount,
+      isPaid: latest.isPaid,
+    };
   };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-
       <SafeAreaView
         style={[
           styles.headerSafeArea,
@@ -92,17 +119,14 @@ export default function DriverMarketplaceScreen() {
         ]}
       >
         <View style={styles.headerRow}>
-          {/* Back Button */}
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="arrow-back" size={24} color={theme.text} />
           </TouchableOpacity>
-
           <AppText style={[styles.brandText, { color: theme.text }]}>
-            Available Requests
+            {id ? "Related Requests" : "Available Requests"}
           </AppText>
         </View>
       </SafeAreaView>
@@ -111,41 +135,94 @@ export default function DriverMarketplaceScreen() {
         contentContainerStyle={styles.scrollLayout}
         showsVerticalScrollIndicator={false}
       >
-        {isLoading ? (
+        {!id ? (
+          <View style={styles.emptyWrapper}>
+            <AppText style={{ color: theme.textMuted }}>
+              ID is required to view requests
+            </AppText>
+          </View>
+        ) : isLoading ? (
           <View style={styles.loaderWrapper}>
             <ActivityIndicator size="large" color={theme.primary} />
           </View>
         ) : parcels.length === 0 ? (
           <View style={styles.emptyWrapper}>
             <AppText style={{ color: theme.textMuted }}>
-              No delivery requests available.
+              No related requests found.
             </AppText>
           </View>
         ) : (
           parcels.map((parcel) => {
             const clientName = parcel.user?.fullName || "Anonymous Requester";
             const clientImage = parcel.user?.profileImage;
-            const hasImage = !!clientImage;
+            const negotiation = getNegotiationSummary(parcel);
+
+            // Item should be disabled if a negotiation has started/ended and this driver isn't part of it
+            const isCardDisabled = parcel.isDisabled && !parcel.isNegotiator;
 
             return (
               <TouchableOpacity
                 key={parcel._id}
-                activeOpacity={0.9}
+                activeOpacity={isCardDisabled ? 1 : 0.9}
+                disabled={isCardDisabled}
                 onPress={() =>
                   router.push({
                     pathname: "/(details)/details",
-                    params: { id: parcel._id },
+                    params: {
+                      id: parcel._id,
+                      type: "parcelrequest",
+                      negotiatorService: id,
+                    },
                   })
                 }
                 style={[
                   styles.driverCard,
                   { backgroundColor: theme.surface, borderColor: theme.border },
+                  negotiation && styles.negotiatedCard,
+                  isCardDisabled && styles.disabledCard,
                 ]}
               >
-                {/* User Info Header Block */}
+                {/* Negotiation Indicator */}
+                {negotiation && (
+                  <View style={styles.negotiationBadge}>
+                    <Ionicons
+                      name="chatbubble-ellipses-outline"
+                      size={16}
+                      color={theme.primary}
+                    />
+                    <AppText
+                      style={[styles.negotiationText, { color: theme.primary }]}
+                    >
+                      Negotiation • {negotiation.status}
+                      {negotiation.agreedAmount &&
+                        ` • ₦${negotiation.agreedAmount}`}
+                    </AppText>
+                  </View>
+                )}
+
+                {/* Closed / Taken Indicator */}
+                {isCardDisabled && (
+                  <View style={styles.disabledBadge}>
+                    <Ionicons
+                      name="lock-closed-outline"
+                      size={14}
+                      color={theme.textMuted}
+                    />
+                    <AppText
+                      style={[
+                        styles.disabledBadgeText,
+                        { color: theme.textMuted },
+                      ]}
+                    >
+                      Ride Taken / Unavailable
+                    </AppText>
+                  </View>
+                )}
+
+                {/* User Info */}
                 <View style={styles.userInfoRow}>
                   <View style={styles.avatarWrapper}>
-                    {hasImage ? (
+                    {clientImage ? (
                       <Image
                         source={{ uri: clientImage }}
                         style={styles.avatarImage}
@@ -154,7 +231,11 @@ export default function DriverMarketplaceScreen() {
                       <View
                         style={[
                           styles.initialsBox,
-                          { backgroundColor: theme.primary },
+                          {
+                            backgroundColor: isCardDisabled
+                              ? "#CBD5E1"
+                              : theme.primary,
+                          },
                         ]}
                       >
                         <AppText style={styles.initialsText}>
@@ -170,15 +251,13 @@ export default function DriverMarketplaceScreen() {
                     >
                       {clientName}
                     </AppText>
-                    <AppText style={{ color: theme.textMuted, fontSize: 11 }}>
-                      {parcel.user?.isVerified
-                        ? "🔒 Verified Poster"
-                        : "Active User"}
+                    <AppText style={{ color: theme.textMuted, fontSize: 12 }}>
+                      {parcel.user?.isVerified ? "✓ Verified" : "Active User"}
                     </AppText>
                   </View>
                 </View>
 
-                {/* Routing Destination Block */}
+                {/* Route */}
                 <View
                   style={[
                     styles.routeBlock,
@@ -186,7 +265,7 @@ export default function DriverMarketplaceScreen() {
                   ]}
                 >
                   <AppText style={[styles.driverName, { color: theme.text }]}>
-                    📦 Bound to: {parcel.destinationCity}
+                    To: {parcel.destinationCity}
                   </AppText>
                   <AppText
                     style={[
@@ -194,7 +273,7 @@ export default function DriverMarketplaceScreen() {
                       { color: theme.textMuted, marginTop: 4 },
                     ]}
                   >
-                    📍 Pickup Location: {parcel.pickupAddress}
+                    From: {parcel.pickupAddress}
                   </AppText>
                 </View>
 
@@ -205,74 +284,32 @@ export default function DriverMarketplaceScreen() {
                   ]}
                 />
 
+                {/* Price */}
                 <View style={styles.cardFooterRow}>
                   <AppText
                     style={[styles.priceMatrixText, { color: theme.text }]}
                   >
                     {parcel.priceRange
                       ? `₦${parcel.priceRange.min?.toLocaleString()} - ₦${parcel.priceRange.max?.toLocaleString()}`
-                      : "Price negotiable"}
+                      : "Negotiable"}
                   </AppText>
 
+                  {parcel.properties?.isPerishable && (
+                    <AppText style={{ color: "#f59e0b", fontSize: 12 }}>
+                      Perishable
+                    </AppText>
+                  )}
+                  {parcel.properties?.isFragile && (
+                    <AppText style={{ color: "#ef4444", fontSize: 12 }}>
+                      Fragile
+                    </AppText>
+                  )}
                 </View>
               </TouchableOpacity>
             );
           })
         )}
       </ScrollView>
-
-      {/* Modal Chat */}
-      <Modal animationType="slide" visible={chatVisible} transparent={false}>
-        <View
-          style={[
-            styles.modalContextContainer,
-            { backgroundColor: theme.background },
-          ]}
-        >
-          <SafeAreaView style={{ backgroundColor: theme.surface }}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setChatVisible(false)}>
-                <AppText style={{ color: theme.text, fontSize: 16 }}>
-                  Close
-                </AppText>
-              </TouchableOpacity>
-              <AppText style={[styles.chatTitleName, { color: theme.text }]}>
-                {selectedParcel?.user?.fullName || "Chat"}
-              </AppText>
-            </View>
-          </SafeAreaView>
-
-          <FlatList
-            data={messages}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ padding: 16 }}
-            renderItem={({ item }) => (
-              <View
-                style={[
-                  styles.chatBubbleBase,
-                  {
-                    backgroundColor: theme.surface,
-                    alignSelf:
-                      item.sender === "driver" ? "flex-end" : "flex-start",
-                  },
-                ]}
-              >
-                <AppText style={{ color: theme.text }}>{item.text}</AppText>
-                <AppText
-                  style={{
-                    color: theme.textMuted,
-                    fontSize: 10,
-                    textAlign: "right",
-                    marginTop: 4,
-                  }}
-                >
-                  {item.timestamp}
-                </AppText>
-              </View>
-            )}
-          />
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -286,9 +323,7 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 12,
   },
-  backButton: {
-    marginRight: 8,
-  },
+  backButton: { marginRight: 8 },
   brandText: { fontFamily: "RethinkSans-Bold", fontSize: 20 },
   scrollLayout: { padding: 24 },
   loaderWrapper: {
@@ -307,6 +342,36 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
+  negotiatedCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#10b981",
+  },
+  disabledCard: {
+    opacity: 0.5,
+  },
+  negotiationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(16, 185, 129, 0.08)",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginBottom: 12,
+  },
+  negotiationText: { fontSize: 13, fontWeight: "600" },
+  disabledBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(148, 163, 184, 0.12)",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginBottom: 12,
+    alignSelf: "flex-start",
+  },
+  disabledBadgeText: { fontSize: 12, fontWeight: "500" },
   userInfoRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -319,26 +384,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: "hidden",
   },
-  avatarImage: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
+  avatarImage: { width: "100%", height: "100%", resizeMode: "cover" },
   initialsBox: {
     width: "100%",
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
   },
-  initialsText: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
-    fontSize: 14,
-  },
-  clientNameText: {
-    fontFamily: "RethinkSans-Bold",
-    fontSize: 15,
-  },
+  initialsText: { color: "#FFFFFF", fontWeight: "bold", fontSize: 14 },
+  clientNameText: { fontFamily: "RethinkSans-Bold", fontSize: 15 },
   routeBlock: {
     padding: 12,
     borderRadius: 14,
@@ -353,20 +407,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   priceMatrixText: { fontFamily: "RethinkSans-Bold", fontSize: 14 },
-  messageTriggerBtn: {
-    paddingHorizontal: 16,
-    height: 38,
-    borderRadius: 12,
-    justifyContent: "center",
-  },
-  btnTextCompact: { color: "#FFFFFF", fontSize: 12, fontWeight: "600" },
-  modalContextContainer: { flex: 1 },
-  modalHeader: { flexDirection: "row", padding: 20, alignItems: "center" },
-  chatTitleName: { fontSize: 16, fontWeight: "bold", marginLeft: 20 },
-  chatBubbleBase: {
-    padding: 14,
-    marginVertical: 6,
-    borderRadius: 16,
-    maxWidth: "80%",
-  },
 });

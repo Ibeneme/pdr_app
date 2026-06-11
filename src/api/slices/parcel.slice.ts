@@ -6,16 +6,35 @@ import { logout } from "./auth.slice";
 
 export interface ParcelBooking {
     _id: string;
-    requestedBy: string;
-    senderName: string;
-    senderPhone: string;
-    recipientName: string;
-    recipientPhone: string;
-    pickupAddress: string;
-    deliveryAddress: string;
-    parcelType: string;
-    weight?: number;
+    requestedBy: string | any; // Adjust to an object type if you populate user details on the frontend
+    route: {
+        pickupAddress: string;
+        deliveryAddress: string;
+    };
+    parties: {
+        sender: {
+            fullName: string;
+            contact: string;
+        };
+        recipient: {
+            fullName: string;
+            contact: string;
+        };
+    };
+    item: {
+        name: string;
+        properties: {
+            isFragile: boolean;
+            isPerishable: boolean;
+            isInsured: boolean;
+        };
+    };
+    schedule: {
+        type: string;
+        date: string;
+    };
     status: "pending" | "assigned" | "in-transit" | "delivered" | "cancelled";
+    notes?: string;
     createdAt: string;
     updatedAt: string;
 }
@@ -34,6 +53,23 @@ const initialState: ParcelState = {
     error: null,
 };
 
+interface JoinRideData {
+    _id: string;
+    requestedBy: string | any;
+    route: {
+        pickupAddress: string;
+        deliveryAddress: string;
+    };
+    schedule: {
+        type: string;
+        date: string;
+    };
+    status: "pending" | "assigned" | "in-transit" | "delivered" | "cancelled";
+    notes?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
 const BASE_URL = "/padiman_route/send_a_delivery";
 
 // --- Async Thunks ---
@@ -45,9 +81,22 @@ export const createParcelBooking = createAsyncThunk<ParcelBooking, Partial<Parce
         try {
             console.log("[PARCEL SLICE] Booking new parcel...");
             const response = await axiosInstance.post(`${BASE_URL}`, parcelData);
-            return response.data.data; // Extracts your backend response pattern { success: true, data: ... }
+            return response.data.data;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.message || "Failed to create parcel booking");
+        }
+    }
+);
+
+export const createJoinRide = createAsyncThunk<JoinRideData, Partial<JoinRideData>, { rejectValue: string }>(
+    "parcel/createJoinRide",
+    async (joinRideData, { rejectWithValue }) => {
+        try {
+            console.log("[PARCEL SLICE] Creating join ride...");
+            const response = await axiosInstance.post(`${BASE_URL}/create/join-ride`, joinRideData);
+            return response.data.data;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.message || "Failed to create join ride");
         }
     }
 );
@@ -101,7 +150,7 @@ export const deleteParcel = createAsyncThunk<string, string, { rejectValue: stri
         try {
             console.log(`[PARCEL SLICE] Cancelling booking execution for parcel ID: ${id}`);
             await axiosInstance.delete(`${BASE_URL}/${id}`);
-            return id; // Return ID to smoothly excise it from the frontend array store matching array tracks
+            return id;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.message || "Cancellation failed");
         }
@@ -125,11 +174,18 @@ const parcelSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            // Create Fulfillment
+            // Create Parcel Fulfillment
             .addCase(createParcelBooking.fulfilled, (state, action: PayloadAction<ParcelBooking>) => {
                 state.isLoading = false;
-                state.parcels.unshift(action.payload); // Prepends to history list automatically
+                state.parcels.unshift(action.payload);
                 state.currentParcel = action.payload;
+            })
+            // Create Join Ride Fulfillment
+            .addCase(createJoinRide.fulfilled, (state, action: PayloadAction<JoinRideData>) => {
+                state.isLoading = false;
+                // Note: JoinRideData is a subset — you may want to cast or extend if needed
+                state.parcels.unshift(action.payload as ParcelBooking);
+                state.currentParcel = action.payload as ParcelBooking;
             })
             // Fetch All Fulfillment
             .addCase(getUserParcels.fulfilled, (state, action: PayloadAction<ParcelBooking[]>) => {
@@ -145,7 +201,6 @@ const parcelSlice = createSlice({
             .addCase(updateParcel.fulfilled, (state, action: PayloadAction<ParcelBooking>) => {
                 state.isLoading = false;
                 state.currentParcel = action.payload;
-                // Sync specific localized list values within cache tables
                 const idx = state.parcels.findIndex(p => p._id === action.payload._id);
                 if (idx !== -1) state.parcels[idx] = action.payload;
             })

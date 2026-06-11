@@ -107,33 +107,60 @@ export const deleteParcelRequest = createAsyncThunk<string, string, { rejectValu
     }
 );
 
-// Fetch all requests across the platform (Global View)
-export const getAllGlobalRequests = createAsyncThunk<ParcelRequest[], void, { rejectValue: string }>(
-    "parcel/getAllGlobalRequests",
-    async (_, { rejectWithValue }) => {
-        try {
-            // 1. Log the exact URL being called
-            console.log("🔍 [getAllGlobalRequests] Fetching from:", `${BASE_URL}/all`);
-            
-            const response = await axiosInstance.get(`${BASE_URL}/getAllRequests/all`);
-            
-            // 2. Log the successful response
-            console.log("✅ [getAllGlobalRequests] Success:", response.data);
-            
-            return response.data.data;
-        } catch (error: any) {
-            // 3. Log the full error object to see exactly what the server returned
-            console.error("❌ [getAllGlobalRequests] Error details:", {
-                message: error.message,
-                response: error.response?.data,
-                status: error.response?.status
-            });
-            
-            return rejectWithValue(error.response?.data?.message || "Failed to fetch global requests");
-        }
-    }
-);
 
+
+export const getAllGlobalRequests = createAsyncThunk<
+  any[],                    // Return type: array of parcels
+  string,                   // Now accepts string (the ID) directly
+  { rejectValue: string }
+>(
+  "parcel/getAllGlobalRequests",
+  async (id: string, { rejectWithValue }) => {
+    console.log("🚀 [getAllGlobalRequests] Thunk triggered with ID:", id);
+
+    if (!id) {
+      return rejectWithValue("ID is required");
+    }
+
+    try {
+      const url = `${BASE_URL}/all-this/${id}`;
+      console.log(`🌐 [getAllGlobalRequests] GET Request to: ${url}`);
+
+      const response = await axiosInstance.get(url);
+      console.log("📥 [getAllGlobalRequests] Response received:", response.status);
+
+      const responseData = response.data;
+
+      // Log full response for debugging
+      console.log("📄 Full Server Response:", responseData);
+
+      if (responseData?.success === true) {
+        const data = responseData.data;
+
+        // Ensure we always return a flat array of parcels
+        const parcelsArray = Array.isArray(data) 
+          ? data 
+          : data ? [data] : [];
+
+        console.log(`✨ [getAllGlobalRequests] Successfully returning ${parcelsArray.length} parcels`);
+        return parcelsArray;
+      }
+
+      // Fallback if success is false or missing
+      console.warn("⚠️ [getAllGlobalRequests] Unexpected response structure:", responseData);
+      return Array.isArray(responseData?.data) ? responseData.data : [];
+
+    } catch (error: any) {
+    //   console.error("❌ [getAllGlobalRequests] Network Error:", error?.response?.data || error.message);
+      
+    //   return rejectWithValue(
+    //     error?.response?.data?.message || 
+    //     error?.message || 
+    //     "Failed to fetch requests"
+    //   );
+    }
+  }
+);
 // --- Slice ---
 
 const parcelSlice = createSlice({
@@ -178,7 +205,7 @@ const parcelSlice = createSlice({
             .addMatcher(isRejected(createParcelRequest, getUserRequests, getRequestById, updateParcelRequest, deleteParcelRequest, getAllGlobalRequests),
                 (state, action) => {
                     state.isLoading = false;
-                    state.error = action.payload as string || "An error occurred";
+                    //   state.error = action.payload as string || "An error occurred";
                 }
             );
     },

@@ -23,6 +23,7 @@ interface PaymentState {
     isLoading: boolean;
     error: string | null;
     isPaymentSuccess: boolean;
+    isEscrowReleaseSuccess: boolean; // Tracking flag for the new operation
 }
 
 const initialState: PaymentState = {
@@ -32,6 +33,7 @@ const initialState: PaymentState = {
     isLoading: false,
     error: null,
     isPaymentSuccess: false,
+    isEscrowReleaseSuccess: false,
 };
 
 const BASE_URL = "/padiman_route/payments"; // Update path if your express root varies
@@ -40,7 +42,7 @@ const BASE_URL = "/padiman_route/payments"; // Update path if your express root 
 
 // 1. Kickstart Checkout Window generation with Paystack
 export const initializePayment = createAsyncThunk<
-    { checkoutUrl: string; reference: string }, // Success return signature
+    { checkoutUrl: string; reference: string },
     { negotiationId: string; serviceType: "offer_a_ride" | "deliver_a_parcel"; email: string; amount?: number; userId?: string },
     { rejectValue: string }
 >(
@@ -66,7 +68,6 @@ export const verifyPayment = createAsyncThunk<any, string, { rejectValue: string
     "payment/verify",
     async (reference, { rejectWithValue }) => {
         try {
-            // CRITICAL: Ensure there is a explicit forward slash separating the base URL and reference string parameter
             const response = await axiosInstance.get(`${BASE_URL}/verify/${reference}`);
             return response.data;
         } catch (error: any) {
@@ -74,6 +75,23 @@ export const verifyPayment = createAsyncThunk<any, string, { rejectValue: string
         }
     }
 );
+
+// 3. NEW: Shift escrow balance item to spendable ledger balance parameters
+export const releaseEscrowEarnings = createAsyncThunk<any, string, { rejectValue: string }>(
+    "payment/releaseEscrow",
+    async (negotiationId, { rejectWithValue }) => {
+        console.log(`📡 [SLICE_THUNK] Releasing escrow items for Negotiation ID: ${negotiationId}`);
+        try {
+            const response = await axiosInstance.put(`${BASE_URL}/earnings/release/${negotiationId}`);
+            console.log("📥 [SLICE_THUNK] Escrow cleared on db side context:", response.data);
+            return response.data;
+        } catch (error: any) {
+            console.error("❌ [SLICE_THUNK] Escrow release rejected:", error.response?.data);
+            return rejectWithValue(error.response?.data?.message || error.response?.data?.error || "Failed to clear escrow items");
+        }
+    }
+);
+
 // --- Slice Configuration ---
 
 const paymentSlice = createSlice({
@@ -86,6 +104,7 @@ const paymentSlice = createSlice({
             state.activeReference = null;
             state.error = null;
             state.isPaymentSuccess = false;
+            state.isEscrowReleaseSuccess = false;
         }
     },
     extraReducers: (builder) => {
@@ -103,8 +122,13 @@ const paymentSlice = createSlice({
                 console.log("🎉 [SLICE_FULFILLED] Payment captured successfully. Core records are marked PAID");
                 state.isLoading = false;
                 state.isPaymentSuccess = action.payload.success;
-                // Cleanup current processing instances out of active variables
                 state.checkoutUrl = null;
+            })
+            // NEW: Handle Escrow Earnings Release Successful
+            .addCase(releaseEscrowEarnings.fulfilled, (state, action) => {
+                console.log("🎉 [SLICE_FULFILLED] Escrow unlocked cleanly. Wallet balance adjusted across application viewports");
+                state.isLoading = false;
+                state.isEscrowReleaseSuccess = action.payload.success;
             })
             // Flush state on logout event hook
             .addCase(logout, (state) => {
@@ -113,6 +137,7 @@ const paymentSlice = createSlice({
                 state.checkoutUrl = null;
                 state.activeReference = null;
                 state.isPaymentSuccess = false;
+                state.isEscrowReleaseSuccess = false;
                 state.error = null;
             })
             // Universal Generic Loader Pipeline Matches
@@ -128,9 +153,9 @@ const paymentSlice = createSlice({
                 (state, action: PayloadAction<string | undefined>) => {
                     state.isLoading = false;
                     state.isPaymentSuccess = false;
-                    // state.error = action.payload || "Payment handling system error event";
-                    // console.error(`🚨 [SLICE_REJECTED] Global payment exception caught: ${state.error}`);
-                
+                    state.isEscrowReleaseSuccess = false;
+                    state.error = action.payload || "Payment handling system error event";
+                    console.error(`🚨 [SLICE_REJECTED] Global payment exception caught: ${state.error}`);
                 }
             );
     },

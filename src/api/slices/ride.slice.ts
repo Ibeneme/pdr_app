@@ -110,10 +110,7 @@ export const getRideByIdOffer = createAsyncThunk<RideOffer, string, { rejectValu
 
             return response.data.data;
         } catch (error: any) {
-            console.error("💥 [getRideByIdOffer] Failed for ID:", id);
-            console.error("Error:", error.response?.data || error.message);
-            return rejectWithValue(error.response?.data?.message || "Failed to fetch ride details");
-        }
+      }
     }
 );
 

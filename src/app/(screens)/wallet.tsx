@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   View,
@@ -36,9 +36,8 @@ export default function WalletScreen() {
   const dispatch = useDispatch<AppDispatch>();
 
   // Redux State
-  const { balance, earnings, withdrawals, isLoading } = useSelector(
-    (state: any) => state.wallet
-  );
+  const { balance, withdrawableBalance, earnings, withdrawals, isLoading } =
+    useSelector((state: any) => state.wallet);
 
   // Local State
   const [selectedTx, setSelectedTx] = useState<any>(null);
@@ -50,7 +49,7 @@ export default function WalletScreen() {
   const [webViewModalVisible, setWebViewModalVisible] = useState(false);
   const [activeReference, setActiveReference] = useState<string | null>(null);
 
-  console.warn(balance, earnings, withdrawals, isLoading);
+  console.warn(balance, withdrawableBalance, earnings, withdrawals, isLoading);
   const quickAmounts = [1000, 5000, 10000, 25000];
 
   useFocusEffect(
@@ -75,6 +74,14 @@ export default function WalletScreen() {
         });
     }, [dispatch])
   );
+
+  // Calculate values wrapped inside active escrow holding locks
+  const pendingEscrowAmount = useMemo(() => {
+    if (!earnings || !Array.isArray(earnings)) return 0;
+    return earnings
+      .filter((e: any) => e.status === "pending")
+      .reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+  }, [earnings]);
 
   const handleWebViewNavigationStateChange = async (navState: any) => {
     const { url } = navState;
@@ -178,9 +185,16 @@ export default function WalletScreen() {
     }
   };
 
-  // NEW: Dynamic Order Details Routing Action
   const handleViewOrderDetails = (tx: any) => {
-    setSelectedTx(null); // Dismiss modal summary window frame
+    setSelectedTx(null);
+
+    if (tx.raw?.status === "pending" || tx.status === "PENDING ESCROW") {
+      Alert.alert(
+        "Escrow Holding Active",
+        "This payment is currently held as pending. You cannot access details or initiate withdrawals until this service clears."
+      );
+      return;
+    }
 
     const serviceId = tx.raw?.serviceId;
     const source = tx.raw?.source;
@@ -193,7 +207,6 @@ export default function WalletScreen() {
       return;
     }
 
-    // A. Route to Deliver a Parcel Screen Context
     if (source === "deliver_a_parcel") {
       return router.push({
         pathname: "/(details)/details",
@@ -201,7 +214,6 @@ export default function WalletScreen() {
       });
     }
 
-    // B. Route to Ride Offer / Ride Join Screen Context
     if (source === "ride_offer" || source === "ride_join") {
       return router.push({
         pathname: "/(details)/ride",
@@ -217,7 +229,6 @@ export default function WalletScreen() {
     }
   };
 
-  // Combine earnings and withdrawals into unified transaction list
   const transactions = [
     ...earnings.map((e: any) => ({
       id: e.reference || e._id,
@@ -238,7 +249,7 @@ export default function WalletScreen() {
           ? "Delivery Order Log"
           : "Ride Sharing Journey",
       driver: e.payerName || "System",
-      status: "Settled",
+      status: e.status === "pending" ? "PENDING ESCROW" : "Settled",
       raw: e,
     })),
     ...withdrawals.map((w: any) => ({
@@ -304,7 +315,7 @@ export default function WalletScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* --- PREMIUM BALANCE VIEW BOARD --- */}
+        {/* --- DYNAMIC MULTI-BALANCE MASTER VIEW BOARD --- */}
         <View
           style={[
             styles.balanceMasterCard,
@@ -314,19 +325,60 @@ export default function WalletScreen() {
           <AppText
             size={12}
             weight="bold"
-            color={colors.textMuted}
+            color={colors.primary}
             style={{ letterSpacing: 0.8 }}
           >
-            WALLET AVAILABLE BALANCE
+            WITHDRAWABLE BALANCE
           </AppText>
           <AppText
-            size={34}
+            size={36}
             weight="bold"
             color={colors.text}
-            style={{ marginVertical: 6, letterSpacing: -0.5 }}
+            style={{ marginVertical: 4, letterSpacing: -0.5 }}
           >
-            ₦{balance.toLocaleString()}
+            ₦{withdrawableBalance?.toLocaleString() || "0"}
           </AppText>
+
+          <View
+            style={[styles.balanceDivider, { backgroundColor: colors.border }]}
+          />
+
+          <View style={styles.subBalanceGrid}>
+            <View style={styles.subBalanceItem}>
+              <AppText size={11} color={colors.textMuted} weight="medium">
+                TOTAL VALUE
+              </AppText>
+              <AppText
+                size={15}
+                weight="bold"
+                color={colors.text}
+                style={{ marginTop: 2 }}
+              >
+                ₦{balance.toLocaleString()}
+              </AppText>
+            </View>
+
+            <View
+              style={[
+                styles.verticalDivider,
+                { backgroundColor: colors.border },
+              ]}
+            />
+
+            <View style={styles.subBalanceItem}>
+              <AppText size={11} color="#D97706" weight="medium">
+                HELD IN ESCROW
+              </AppText>
+              <AppText
+                size={15}
+                weight="bold"
+                color="#D97706"
+                style={{ marginTop: 2 }}
+              >
+                ₦{pendingEscrowAmount.toLocaleString()}
+              </AppText>
+            </View>
+          </View>
 
           <View style={styles.balanceTwinActionsRow}>
             <TouchableOpacity
@@ -371,6 +423,8 @@ export default function WalletScreen() {
         ) : (
           transactions.map((tx) => {
             const isIncome = tx.type === "credit";
+            const isPending = tx.status === "PENDING ESCROW";
+
             return (
               <TouchableOpacity
                 key={tx.id}
@@ -388,7 +442,13 @@ export default function WalletScreen() {
                   <View
                     style={[
                       styles.verticalIndicatorPillMarker,
-                      { backgroundColor: isIncome ? "#22C55E" : "#EF4444" },
+                      {
+                        backgroundColor: isPending
+                          ? "#D97706"
+                          : isIncome
+                          ? "#22C55E"
+                          : "#EF4444",
+                      },
                     ]}
                   />
                   <View style={{ flex: 1, paddingLeft: 12 }}>
@@ -418,7 +478,9 @@ export default function WalletScreen() {
                     <AppText
                       size={15}
                       weight="bold"
-                      color={isIncome ? "#22C55E" : "#EF4444"}
+                      color={
+                        isPending ? "#D97706" : isIncome ? "#22C55E" : "#EF4444"
+                      }
                     >
                       {tx.amount}
                     </AppText>
@@ -427,11 +489,15 @@ export default function WalletScreen() {
                         styles.statusMiniCapsule,
                         {
                           backgroundColor: colors.background,
-                          borderColor: colors.border,
+                          borderColor: isPending ? "#D97706" : colors.border,
                         },
                       ]}
                     >
-                      <AppText size={9} weight="bold" color={colors.text}>
+                      <AppText
+                        size={9}
+                        weight="bold"
+                        color={isPending ? "#D97706" : colors.text}
+                      >
                         {tx.status.toUpperCase()}
                       </AppText>
                     </View>
@@ -487,7 +553,10 @@ export default function WalletScreen() {
                     styles.centerAuditHeroUnitBanner,
                     {
                       backgroundColor: colors.background,
-                      borderColor: colors.border,
+                      borderColor:
+                        selectedTx.status === "PENDING ESCROW"
+                          ? "#D97706"
+                          : colors.border,
                     },
                   ]}
                 >
@@ -497,7 +566,13 @@ export default function WalletScreen() {
                   <AppText
                     size={32}
                     weight="bold"
-                    color={selectedTx.type === "credit" ? "#22C55E" : "#EF4444"}
+                    color={
+                      selectedTx.status === "PENDING ESCROW"
+                        ? "#D97706"
+                        : selectedTx.type === "credit"
+                        ? "#22C55E"
+                        : "#EF4444"
+                    }
                     style={{ marginVertical: 6 }}
                   >
                     {selectedTx.amount}
@@ -524,6 +599,23 @@ export default function WalletScreen() {
                     </AppText>
                     <AppText size={13} weight="bold" color={colors.text}>
                       {selectedTx.service}
+                    </AppText>
+                  </View>
+
+                  <View style={styles.metadataSplitRowAlign}>
+                    <AppText size={13} color={colors.textMuted}>
+                      Status Check
+                    </AppText>
+                    <AppText
+                      size={13}
+                      weight="bold"
+                      color={
+                        selectedTx.status === "PENDING ESCROW"
+                          ? "#D97706"
+                          : colors.text
+                      }
+                    >
+                      {selectedTx.status}
                     </AppText>
                   </View>
 
@@ -557,19 +649,37 @@ export default function WalletScreen() {
                   </View>
                 </View>
 
-                {/* ACTION ROUTE BUTTON FOR EARNING ITEMS WITH LINKED SERVICE IDS */}
-                {selectedTx.type === "credit" && selectedTx.raw?.serviceId && (
-                  <TouchableOpacity
+                {selectedTx.type === "credit" &&
+                  selectedTx.raw?.serviceId &&
+                  selectedTx.status !== "PENDING ESCROW" && (
+                    <TouchableOpacity
+                      style={[
+                        styles.primaryRoutingButton,
+                        { backgroundColor: colors.primary },
+                      ]}
+                      onPress={() => handleViewOrderDetails(selectedTx)}
+                    >
+                      <AppText size={14} weight="bold" color="#FFF">
+                        View Order Details
+                      </AppText>
+                    </TouchableOpacity>
+                  )}
+
+                {selectedTx.status === "PENDING ESCROW" && (
+                  <View
                     style={[
                       styles.primaryRoutingButton,
-                      { backgroundColor: colors.primary },
+                      {
+                        backgroundColor: "rgba(217, 119, 6, 0.1)",
+                        borderWidth: 1,
+                        borderColor: "#D97706",
+                      },
                     ]}
-                    onPress={() => handleViewOrderDetails(selectedTx)}
                   >
-                    <AppText size={14} weight="bold" color="#FFF">
-                      View Order Details
+                    <AppText size={14} weight="bold" color="#D97706">
+                      Pending Completion Clearance
                     </AppText>
-                  </TouchableOpacity>
+                  </View>
                 )}
               </ScrollView>
             )}
@@ -783,8 +893,32 @@ const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1.5,
     marginBottom: 20,
+    alignItems: "center",
   },
-  balanceTwinActionsRow: { flexDirection: "row", gap: 10, marginTop: 24 },
+  balanceDivider: {
+    height: 1,
+    width: "100%",
+    marginVertical: 16,
+  },
+  subBalanceGrid: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+  },
+  subBalanceItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  verticalDivider: {
+    width: 1,
+    height: 30,
+  },
+  balanceTwinActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 24,
+    width: "100%",
+  },
   actionCellBtn: {
     flex: 1,
     height: 48,

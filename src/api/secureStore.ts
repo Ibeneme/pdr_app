@@ -1,9 +1,45 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { router } from "expo-router";
+import { Platform } from "react-native";
 
 const TOKEN_KEY = "pr_authToken";
 const USER_KEY = "pr_userData";
+
+// Check if we are running in a web environment
+const isWeb = Platform.OS === "web";
+
+/**
+ * Universal helper to save items depending on the environment.
+ */
+const setItem = async (key: string, value: string): Promise<void> => {
+  if (isWeb) {
+    await AsyncStorage.setItem(key, value);
+  } else {
+    await SecureStore.setItemAsync(key, value);
+  }
+};
+
+/**
+ * Universal helper to get items depending on the environment.
+ */
+const getItem = async (key: string): Promise<string | null> => {
+  if (isWeb) {
+    return await AsyncStorage.getItem(key);
+  }
+  return await SecureStore.getItemAsync(key);
+};
+
+/**
+ * Universal helper to delete items depending on the environment.
+ */
+const deleteItem = async (key: string): Promise<void> => {
+  if (isWeb) {
+    await AsyncStorage.removeItem(key);
+  } else {
+    await SecureStore.deleteItemAsync(key);
+  }
+};
 
 /**
  * Basic presence check for a token string.
@@ -21,10 +57,10 @@ export const saveAuthToken = async (token: string | null | undefined): Promise<v
       await removeAuthToken();
       return;
     }
-    await SecureStore.setItemAsync(TOKEN_KEY, token as string);
-    console.log("🔐 Auth token saved successfully");
+    await setItem(TOKEN_KEY, token as string);
+    console.log(`🔐 Auth token saved successfully (${isWeb ? "Web Storage" : "Secure Store"})`);
   } catch (err) {
-    console.error("SECURE_STORE_SAVE_ERROR:", err);
+    console.error("STORAGE_SAVE_ERROR:", err);
   }
 };
 
@@ -33,14 +69,14 @@ export const saveAuthToken = async (token: string | null | undefined): Promise<v
  */
 export const getAuthToken = async (): Promise<string | null> => {
   try {
-    const token = await SecureStore.getItemAsync(TOKEN_KEY);
+    const token = await getItem(TOKEN_KEY);
     if (!token) {
-      console.log("🔑 No auth token found in secure store");
+      console.log("🔑 No auth token found in storage");
       return null;
     }
     return token;
   } catch (err) {
-    console.error("SECURE_STORE_GET_ERROR:", err);
+    console.error("STORAGE_GET_ERROR:", err);
     return null;
   }
 };
@@ -48,7 +84,7 @@ export const getAuthToken = async (): Promise<string | null> => {
 /* ====================== USER DATA FUNCTIONS ====================== */
 
 /**
- * Save user profile data to secure storage.
+ * Save user profile data to storage.
  */
 export const saveUser = async (user: any): Promise<void> => {
   try {
@@ -56,33 +92,33 @@ export const saveUser = async (user: any): Promise<void> => {
       console.warn("⚠️ Invalid user data passed to saveUser");
       return;
     }
-    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
-    console.log("👤 User data saved successfully:", {
+    await setItem(USER_KEY, JSON.stringify(user));
+    console.log(`👤 User data saved successfully (${isWeb ? "Web Storage" : "Secure Store"}):`, {
       id: user._id || user?.id,
       fullName: user.fullName || user.name,
       email: user.email,
     });
   } catch (err) {
-    console.error("SECURE_STORE_USER_SAVE_ERROR:", err);
+    console.error("STORAGE_USER_SAVE_ERROR:", err);
   }
 };
 
 /**
- * Retrieve user profile from secure storage.
+ * Retrieve user profile from storage.
  */
 export const getUser = async (): Promise<any | null> => {
   try {
-    const userString = await SecureStore.getItemAsync(USER_KEY);
+    const userString = await getItem(USER_KEY);
     if (!userString) {
-      console.log("🔑 No user data found in secure store");
+      console.log("🔑 No user data found in storage");
       return null;
     }
 
     const user = JSON.parse(userString);
-    console.log("👤 User retrieved from secure store:", user.fullName || user.name);
+    console.log("👤 User retrieved from storage:", user.fullName || user.name);
     return user;
   } catch (err) {
-    console.error("SECURE_STORE_USER_GET_ERROR:", err);
+    console.error("STORAGE_USER_GET_ERROR:", err);
     return null;
   }
 };
@@ -92,21 +128,21 @@ export const getUser = async (): Promise<any | null> => {
  */
 export const removeUser = async (): Promise<void> => {
   try {
-    await SecureStore.deleteItemAsync(USER_KEY);
-    console.log("🗑️ User data removed from secure storage");
+    await deleteItem(USER_KEY);
+    console.log("🗑️ User data removed from storage");
   } catch (err) {
-    console.error("SECURE_STORE_USER_DELETE_ERROR:", err);
+    console.error("STORAGE_USER_DELETE_ERROR:", err);
   }
 };
 
 /**
- * Clears hardware secure layers, async storage cache, and updates routing.
+ * Clears hardware secure layers/local caches and updates routing.
  */
 export const removeAuthToken = async (): Promise<void> => {
   try {
     await Promise.allSettled([
-      SecureStore.deleteItemAsync(TOKEN_KEY),
-      SecureStore.deleteItemAsync(USER_KEY), // Also clear user data
+      deleteItem(TOKEN_KEY),
+      deleteItem(USER_KEY),
       AsyncStorage.clear(),
     ]);
     console.log("Full session and data caches cleared.");
@@ -123,8 +159,8 @@ export const removeAuthToken = async (): Promise<void> => {
 export const clearAuthData = async (): Promise<void> => {
   try {
     await Promise.allSettled([
-      SecureStore.deleteItemAsync(TOKEN_KEY),
-      SecureStore.deleteItemAsync(USER_KEY),
+      deleteItem(TOKEN_KEY),
+      deleteItem(USER_KEY),
       AsyncStorage.clear(),
     ]);
     console.log("🧹 All authentication data cleared successfully");
