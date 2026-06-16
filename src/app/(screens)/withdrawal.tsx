@@ -11,6 +11,7 @@ import {
   Modal,
   TouchableWithoutFeedback,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -24,6 +25,7 @@ import {
   Search,
 } from "lucide-react-native";
 import { AppText } from "@/components/AppText";
+import { LinearGradient } from "expo-linear-gradient";
 
 // Redux Integration Imports
 import { useDispatch, useSelector } from "react-redux";
@@ -35,8 +37,10 @@ import {
   resolveAccount,
 } from "@/api/slices/wallet.slice";
 
+const WITHDRAWAL_FEE_PERCENTAGE = 1.5; // 1.5% fee
+
 export default function WithdrawScreen() {
-  const { theme: colors, isDark } = useTheme();
+  const { theme, isDark } = useTheme();
   const router = useRouter();
 
   // Redux Hook Allocations
@@ -218,6 +222,8 @@ export default function WithdrawScreen() {
 
   // UI Checks and State Enforcements
   const parsedAmount = parseInt(amount, 10) || 0;
+  const fee = Math.round(parsedAmount * (WITHDRAWAL_FEE_PERCENTAGE / 100));
+  const netAmount = parsedAmount - fee;
   const isExceedingWithdrawable = parsedAmount > withdrawableBalance;
   const isButtonDisabled =
     isLoading ||
@@ -227,342 +233,368 @@ export default function WithdrawScreen() {
     parsedAmount <= 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
+      {/* PREMIUM HEADER GRADIENT */}
+      <LinearGradient
+        colors={isDark ? ["#2A1B4D", theme.surface] : ["#F8F5FF", "#FFFFFF"]}
+        style={styles.headerGradient}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={[
-              styles.iconButton,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft size={22} color={colors.text} />
-          </TouchableOpacity>
-          <AppText size={18} weight="bold" color={colors.text}>
-            Withdraw Funds
-          </AppText>
-          <View style={{ width: 44 }} />
-        </View>
-      </SafeAreaView>
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={24} color={theme.text} />
+            </TouchableOpacity>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Dynamic Multi-Balance Display Matrix */}
-        <View
-          style={[
-            styles.mainBalanceCard,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <AppText
-            size={12}
-            color={colors.primary}
-            weight="bold"
-            style={{ letterSpacing: 0.8 }}
-          >
-            WITHDRAWABLE AVAILABLE BALANCE
-          </AppText>
-          <AppText
-            size={40}
-            weight="bold"
-            color={colors.text}
-            style={{ marginTop: 6 }}
-          >
-            ₦{withdrawableBalance.toLocaleString()}
-          </AppText>
+            <AppText size={20} weight="bold" color={theme.text}>
+              Withdraw Funds
+            </AppText>
 
-          <View
-            style={[styles.balanceDivider, { backgroundColor: colors.border }]}
-          />
-
-          <View style={styles.subBalanceGrid}>
-            <View style={styles.subBalanceItem}>
-              <AppText size={11} color={colors.textMuted} weight="medium">
-                TOTAL WALLET VALUE
-              </AppText>
-              <AppText
-                size={15}
-                weight="bold"
-                color={colors.text}
-                style={{ marginTop: 2 }}
-              >
-                ₦{balance.toLocaleString()}
-              </AppText>
-            </View>
-
-            <View
-              style={[
-                styles.verticalDivider,
-                { backgroundColor: colors.border },
-              ]}
-            />
-
-            <View style={styles.subBalanceItem}>
-              <AppText size={11} color="#D97706" weight="medium">
-                LOCKED IN ESCROW
-              </AppText>
-              <AppText
-                size={15}
-                weight="bold"
-                color="#D97706"
-                style={{ marginTop: 2 }}
-              >
-                ₦{pendingEscrowAmount.toLocaleString()}
-              </AppText>
-            </View>
+            <View style={{ width: 40 }} />
           </View>
-        </View>
+        </SafeAreaView>
+      </LinearGradient>
 
-        {isExceedingWithdrawable && (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardContainer}
+      >
+        <ScrollView
+          style={styles.mainScrollView}
+          contentContainerStyle={styles.scrollContentLayout}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* BALANCE DISPLAY */}
           <View
             style={[
-              styles.errorAlertBanner,
-              {
-                backgroundColor: "rgba(239, 68, 68, 0.1)",
-                borderColor: "#EF4444",
-              },
+              styles.mainBalanceCard,
+              { backgroundColor: theme.surface, borderColor: theme.border },
             ]}
           >
-            <AlertCircle size={16} color="#EF4444" />
             <AppText
               size={12}
-              color="#EF4444"
-              weight="medium"
-              style={{ marginLeft: 8, flex: 1 }}
+              color={theme.primary}
+              weight="bold"
+              style={{ letterSpacing: 0.8 }}
             >
-              Amount exceeds your clear payout limits. ₦
-              {pendingEscrowAmount.toLocaleString()} is currently locked safely
-              in escrow.
+              WITHDRAWABLE AVAILABLE BALANCE
             </AppText>
+            <AppText
+              size={36}
+              weight="bold"
+              color={theme.text}
+              style={{ marginVertical: 4, letterSpacing: -0.5 }}
+            >
+              ₦{withdrawableBalance.toLocaleString()}
+            </AppText>
+
+            <View
+              style={[styles.balanceDivider, { backgroundColor: theme.border }]}
+            />
+
+            <View style={styles.subBalanceGrid}>
+              <View style={styles.subBalanceItem}>
+                <AppText size={11} color={theme.textMuted} weight="medium">
+                  TOTAL WALLET VALUE
+                </AppText>
+                <AppText
+                  size={15}
+                  weight="bold"
+                  color={theme.text}
+                  style={{ marginTop: 2 }}
+                >
+                  ₦{balance.toLocaleString()}
+                </AppText>
+              </View>
+
+              <View
+                style={[
+                  styles.verticalDivider,
+                  { backgroundColor: theme.border },
+                ]}
+              />
+
+              <View style={styles.subBalanceItem}>
+                <AppText size={11} color="#D97706" weight="medium">
+                  LOCKED IN ESCROW
+                </AppText>
+                <AppText
+                  size={15}
+                  weight="bold"
+                  color="#D97706"
+                  style={{ marginTop: 2 }}
+                >
+                  ₦{pendingEscrowAmount.toLocaleString()}
+                </AppText>
+              </View>
+            </View>
           </View>
-        )}
 
-        <AppText
-          size={12}
-          weight="bold"
-          color={colors.textMuted}
-          style={{
-            marginBottom: 12,
-            letterSpacing: 0.5,
-            textTransform: "uppercase",
-          }}
-        >
-          WITHDRAWAL CONFIGURATION
-        </AppText>
+          {isExceedingWithdrawable && (
+            <View
+              style={[
+                styles.errorAlertBanner,
+                {
+                  backgroundColor: "rgba(239, 68, 68, 0.1)",
+                  borderColor: "#EF4444",
+                },
+              ]}
+            >
+              <AlertCircle size={16} color="#EF4444" />
+              <AppText
+                size={12}
+                color="#EF4444"
+                weight="medium"
+                style={{ marginLeft: 8, flex: 1 }}
+              >
+                Amount exceeds your clear payout limits. ₦
+                {pendingEscrowAmount.toLocaleString()} is currently locked
+                safely in escrow.
+              </AppText>
+            </View>
+          )}
 
-        <View
-          style={[
-            styles.formCard,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          {/* Amount Field */}
           <AppText
-            size={13}
-            weight="medium"
-            color={colors.text}
-            style={styles.label}
+            size={12}
+            weight="bold"
+            color={theme.textMuted}
+            style={{
+              marginBottom: 12,
+              letterSpacing: 0.5,
+              textTransform: "uppercase",
+              paddingHorizontal: 4,
+            }}
           >
-            Amount (₦)
+            WITHDRAWAL CONFIGURATION
           </AppText>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.background,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            placeholder="0.00"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-          />
 
-          {/* Bank Picker Dropdown */}
-          <AppText
-            size={13}
-            weight="medium"
-            color={colors.text}
-            style={[styles.label, { marginTop: 18 }]}
-          >
-            Select Bank
-          </AppText>
-          <TouchableOpacity
+          <View
             style={[
-              styles.input,
-              styles.pickerTrigger,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-              },
+              styles.formCard,
+              { backgroundColor: theme.surface, borderColor: theme.border },
             ]}
-            onPress={() => setBankPickerVisible(true)}
           >
-            <AppText size={15} color={colors.text}>
-              {selectedBankName}
+            {/* Amount Field */}
+            <AppText
+              size={13}
+              weight="medium"
+              color={theme.text}
+              style={styles.label}
+            >
+              Amount (₦)
             </AppText>
-            <ChevronDown size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          {/* Account Number Field */}
-          <AppText
-            size={13}
-            weight="medium"
-            color={colors.text}
-            style={[styles.label, { marginTop: 18 }]}
-          >
-            Account Number
-          </AppText>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.background,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            placeholder="Enter 10-digit account number"
-            placeholderTextColor={colors.textMuted}
-            value={accountNumber}
-            onChangeText={setAccountNumber}
-            keyboardType="numeric"
-            maxLength={10}
-          />
-
-          {/* Account Name Field */}
-          <AppText
-            size={13}
-            weight="medium"
-            color={colors.text}
-            style={[styles.label, { marginTop: 18 }]}
-          >
-            Account Name
-          </AppText>
-          <View style={{ justifyContent: "center" }}>
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: isDark ? "#1f1f1f" : "#f5f5f5",
-                  color: colors.text,
-                  borderColor: colors.border,
-                  paddingRight: 40,
+                  backgroundColor: theme.background,
+                  color: theme.text,
+                  borderColor: theme.border,
                 },
               ]}
-              placeholder="Auto-populated holder name"
-              placeholderTextColor={colors.textMuted}
-              value={accountName}
-              editable={false}
+              placeholder="0.00"
+              placeholderTextColor={theme.textMuted}
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
             />
-            {isResolving && (
-              <ActivityIndicator
-                size="small"
-                color={colors.primary}
-                style={{ position: "absolute", right: 14 }}
-              />
-            )}
-          </View>
-        </View>
 
-        {/* Summary Card */}
-        {amount && !isNaN(parsedAmount) ? (
-          <View
-            style={[
-              styles.summaryCard,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <AppText size={14} weight="bold" color={colors.text}>
-              Withdrawal Summary
+            {/* Bank Picker Dropdown */}
+            <AppText
+              size={13}
+              weight="medium"
+              color={theme.text}
+              style={[styles.label, { marginTop: 18 }]}
+            >
+              Select Bank
             </AppText>
-            <View style={styles.summaryRow}>
-              <AppText size={14} color={colors.textMuted}>
-                Amount
+            <TouchableOpacity
+              style={[
+                styles.input,
+                styles.pickerTrigger,
+                {
+                  backgroundColor: theme.background,
+                  borderColor: theme.border,
+                },
+              ]}
+              onPress={() => setBankPickerVisible(true)}
+            >
+              <AppText size={15} color={theme.text}>
+                {selectedBankName}
               </AppText>
-              <AppText
-                size={15}
-                weight="bold"
-                color={isExceedingWithdrawable ? "#EF4444" : colors.text}
-              >
-                ₦{parsedAmount.toLocaleString()}
-              </AppText>
-            </View>
-            <View style={styles.summaryRow}>
-              <AppText size={14} color={colors.textMuted}>
-                Fee
-              </AppText>
-              <AppText size={14} weight="medium" color={colors.text}>
-                Free (First withdrawal)
-              </AppText>
+              <ChevronDown size={18} color={theme.textMuted} />
+            </TouchableOpacity>
+
+            {/* Account Number Field */}
+            <AppText
+              size={13}
+              weight="medium"
+              color={theme.text}
+              style={[styles.label, { marginTop: 18 }]}
+            >
+              Account Number
+            </AppText>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: theme.background,
+                  color: theme.text,
+                  borderColor: theme.border,
+                },
+              ]}
+              placeholder="Enter 10-digit account number"
+              placeholderTextColor={theme.textMuted}
+              value={accountNumber}
+              onChangeText={setAccountNumber}
+              keyboardType="numeric"
+              maxLength={10}
+            />
+
+            {/* Account Name Field */}
+            <AppText
+              size={13}
+              weight="medium"
+              color={theme.text}
+              style={[styles.label, { marginTop: 18 }]}
+            >
+              Account Name
+            </AppText>
+            <View style={{ justifyContent: "center" }}>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.background,
+                    color: theme.text,
+                    borderColor: theme.border,
+                    paddingRight: 40,
+                  },
+                ]}
+                placeholder="Auto-populated holder name"
+                placeholderTextColor={theme.textMuted}
+                value={accountName}
+                editable={false}
+              />
+              {isResolving && (
+                <ActivityIndicator
+                  size="small"
+                  color={theme.primary}
+                  style={{ position: "absolute", right: 14 }}
+                />
+              )}
             </View>
           </View>
-        ) : null}
 
-        <TouchableOpacity
-          style={[
-            styles.withdrawButton,
-            {
-              backgroundColor: isButtonDisabled
-                ? colors.border
-                : colors.primary,
-            },
-          ]}
-          onPress={handleWithdraw}
-          disabled={isButtonDisabled}
-          activeOpacity={0.85}
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <AppText
-                size={16}
-                weight="bold"
-                color={isButtonDisabled ? colors.textMuted : "#fff"}
-                style={{ marginRight: 8 }}
-              >
-                Confirm Withdrawal
+          {/* Summary Card - Updated with Percentage Fee */}
+          {amount && !isNaN(parsedAmount) && parsedAmount > 0 ? (
+            <View
+              style={[
+                styles.summaryCard,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+            >
+              <AppText size={14} weight="bold" color={theme.text}>
+                Withdrawal Summary
               </AppText>
-              <ArrowUpRight
-                size={20}
-                color={isButtonDisabled ? colors.textMuted : "#fff"}
-              />
-            </>
-          )}
-        </TouchableOpacity>
 
-        <View style={styles.noteContainer}>
-          <CheckCircle size={16} color={colors.textMuted} />
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={{ marginLeft: 8, flex: 1 }}
+              <View style={styles.summaryRow}>
+                <AppText size={14} color={theme.textMuted}>
+                  Amount
+                </AppText>
+                <AppText
+                  size={15}
+                  weight="bold"
+                  color={isExceedingWithdrawable ? "#EF4444" : theme.text}
+                >
+                  ₦{parsedAmount.toLocaleString()}
+                </AppText>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <AppText size={14} color={theme.textMuted}>
+                  Fee ({WITHDRAWAL_FEE_PERCENTAGE}%)
+                </AppText>
+                <AppText size={14} weight="medium" color={theme.text}>
+                  ₦{fee.toLocaleString()}
+                </AppText>
+              </View>
+
+              <View
+                style={[
+                  styles.summaryRow,
+                  {
+                    borderTopWidth: 1,
+                    borderTopColor: theme.border,
+                    paddingTop: 12,
+                    marginTop: 8,
+                  },
+                ]}
+              >
+                <AppText size={14} weight="bold" color={theme.text}>
+                  You will receive
+                </AppText>
+                <AppText size={16} weight="bold" color={theme.primary}>
+                  ₦{netAmount.toLocaleString()}
+                </AppText>
+              </View>
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[
+              styles.withdrawButton,
+              {
+                backgroundColor: isButtonDisabled
+                  ? theme.border
+                  : theme.primary,
+              },
+            ]}
+            onPress={handleWithdraw}
+            disabled={isButtonDisabled}
+            activeOpacity={0.85}
           >
-            Funds will reflect within 30 minutes to 2 hours during normal
-            banking operations.
-          </AppText>
-        </View>
-      </ScrollView>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <AppText
+                  size={16}
+                  weight="bold"
+                  color={isButtonDisabled ? theme.textMuted : "#fff"}
+                  style={{ marginRight: 8 }}
+                >
+                  Confirm Withdrawal
+                </AppText>
+                <ArrowUpRight
+                  size={20}
+                  color={isButtonDisabled ? theme.textMuted : "#fff"}
+                />
+              </>
+            )}
+          </TouchableOpacity>
 
-      {/* MODAL 1: Bank Picker Bottom Sheet */}
+          <View style={styles.noteContainer}>
+            <CheckCircle size={16} color={theme.textMuted} />
+            <AppText
+              size={12}
+              color={theme.textMuted}
+              style={{ marginLeft: 8, flex: 1 }}
+            >
+              Funds will reflect within 30 minutes to 2 hours during normal
+              banking operations.
+            </AppText>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* BANK PICKER MODAL */}
       <Modal
         visible={bankPickerVisible}
         transparent
@@ -572,200 +604,193 @@ export default function WithdrawScreen() {
           setBankPickerVisible(false);
         }}
       >
-        <TouchableWithoutFeedback
-          onPress={() => {
-            setSearchQuery("");
-            setBankPickerVisible(false);
-          }}
-        >
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View
-                style={[
-                  styles.modalContent,
-                  {
-                    backgroundColor: colors.surface,
-                    minHeight: "85%",
-                    maxHeight: "90%",
-                  },
-                ]}
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            activeOpacity={1}
+            onPress={() => {
+              setSearchQuery("");
+              setBankPickerVisible(false);
+            }}
+          />
+          <View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: theme.surface,
+                height: "85%",
+              },
+            ]}
+          >
+            <View
+              style={[styles.modalKnob, { backgroundColor: theme.border }]}
+            />
+
+            <View style={styles.pickerHeaderRow}>
+              <AppText size={18} weight="bold" color={theme.text}>
+                Select Destination Bank
+              </AppText>
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchQuery("");
+                  setBankPickerVisible(false);
+                }}
               >
-                <View style={styles.modalIndicator} />
-                <View style={styles.pickerHeaderRow}>
-                  <AppText size={16} weight="bold" color={colors.text}>
-                    Select Destination Bank
-                  </AppText>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setSearchQuery("");
-                      setBankPickerVisible(false);
-                    }}
+                <X size={22} color={theme.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={[
+                styles.searchBarContainer,
+                {
+                  backgroundColor: theme.background,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Search
+                size={18}
+                color={theme.textMuted}
+                style={styles.searchIcon}
+              />
+              <TextInput
+                style={[styles.searchInputField, { color: theme.text }]}
+                placeholder="Search bank name..."
+                placeholderTextColor={theme.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchQuery ? (
+                <TouchableOpacity onPress={() => setSearchQuery("")}>
+                  <X size={18} color={theme.textMuted} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <ScrollView
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {bankList.length === 0 ? (
+                <View style={{ padding: 40, alignItems: "center" }}>
+                  <ActivityIndicator size="large" color={theme.primary} />
+                  <AppText
+                    size={14}
+                    color={theme.textMuted}
+                    style={{ marginTop: 12 }}
                   >
-                    <X size={20} color={colors.textMuted} />
+                    Loading bank registers...
+                  </AppText>
+                </View>
+              ) : filteredBanks.length === 0 ? (
+                <View style={{ padding: 40, alignItems: "center" }}>
+                  <AlertCircle size={48} color={theme.textMuted} />
+                  <AppText
+                    size={14}
+                    color={theme.textMuted}
+                    style={{ marginTop: 12 }}
+                  >
+                    No banks match "{searchQuery}"
+                  </AppText>
+                </View>
+              ) : (
+                filteredBanks.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.bankItemRow,
+                      { borderBottomColor: theme.border },
+                    ]}
+                    onPress={() => selectBankInstance(item.name, item.code)}
+                  >
+                    <AppText
+                      size={15}
+                      color={theme.text}
+                      weight={
+                        selectedBankCode === item.code ? "bold" : "regular"
+                      }
+                    >
+                      {item.name}
+                    </AppText>
                   </TouchableOpacity>
-                </View>
-
-                <View
-                  style={[
-                    styles.searchBarContainer,
-                    {
-                      backgroundColor: colors.background,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <Search
-                    size={18}
-                    color={colors.textMuted}
-                    style={styles.searchIcon}
-                  />
-                  <TextInput
-                    style={[styles.searchInputField, { color: colors.text }]}
-                    placeholder="Search bank name..."
-                    placeholderTextColor={colors.textMuted}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  {searchQuery ? (
-                    <TouchableOpacity onPress={() => setSearchQuery("")}>
-                      <X
-                        size={16}
-                        color={colors.textMuted}
-                        style={{ padding: 4 }}
-                      />
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-
-                <ScrollView
-                  style={{ width: "100%" }}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {bankList.length === 0 ? (
-                    <View style={{ padding: 24, alignItems: "center" }}>
-                      <ActivityIndicator size="small" color={colors.primary} />
-                      <AppText
-                        size={14}
-                        color={colors.textMuted}
-                        style={{ marginTop: 8 }}
-                      >
-                        Loading bank registers...
-                      </AppText>
-                    </View>
-                  ) : filteredBanks.length === 0 ? (
-                    <View style={{ padding: 32, alignItems: "center" }}>
-                      <AlertCircle size={32} color={colors.textMuted} />
-                      <AppText
-                        size={14}
-                        color={colors.textMuted}
-                        style={{ marginTop: 8 }}
-                      >
-                        No banks match "{searchQuery}"
-                      </AppText>
-                    </View>
-                  ) : (
-                    filteredBanks.map((item) => (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.bankItemRow,
-                          { borderBottomColor: colors.border },
-                        ]}
-                        onPress={() => selectBankInstance(item.name, item.code)}
-                      >
-                        <AppText
-                          size={15}
-                          color={colors.text}
-                          weight={
-                            selectedBankCode === item.code ? "bold" : "regular"
-                          }
-                        >
-                          {item.name}
-                        </AppText>
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </ScrollView>
-              </View>
-            </TouchableWithoutFeedback>
+                ))
+              )}
+            </ScrollView>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
-      {/* MODAL 2: Receipt Status Feedback Sheets */}
+      {/* SUCCESS / ERROR MODAL */}
       <Modal
         visible={modalVisible}
         transparent={true}
         animationType="slide"
         onRequestClose={handleModalClose}
       >
-        <TouchableWithoutFeedback onPress={handleModalClose}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View
-                style={[
-                  styles.modalContent,
-                  { backgroundColor: colors.surface },
-                ]}
-              >
-                <View style={styles.modalIndicator} />
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={handleModalClose}
-                >
-                  <X size={20} color={colors.textMuted} />
-                </TouchableOpacity>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            activeOpacity={1}
+            onPress={handleModalClose}
+          />
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.surface, paddingHorizontal: 24 },
+            ]}
+          >
+            <View
+              style={[styles.modalKnob, { backgroundColor: theme.border }]}
+            />
 
-                <View style={styles.modalIconContainer}>
-                  {modalType === "success" ? (
-                    <CheckCircle size={54} color="#22c55e" />
-                  ) : (
-                    <AlertCircle size={54} color="#ef4444" />
-                  )}
-                </View>
+            <View style={styles.modalIconContainer}>
+              {modalType === "success" ? (
+                <CheckCircle size={64} color="#22c55e" />
+              ) : (
+                <AlertCircle size={64} color="#ef4444" />
+              )}
+            </View>
 
-                <AppText
-                  size={20}
-                  weight="bold"
-                  color={colors.text}
-                  style={{ textAlign: "center", marginBottom: 10 }}
-                >
-                  {modalTitle}
-                </AppText>
-                <AppText
-                  size={14}
-                  color={colors.textMuted}
-                  style={{
-                    textAlign: "center",
-                    paddingHorizontal: 10,
-                    marginBottom: 24,
-                    lineHeight: 20,
-                  }}
-                >
-                  {modalMessage}
-                </AppText>
+            <AppText
+              size={20}
+              weight="bold"
+              color={theme.text}
+              style={{ textAlign: "center", marginBottom: 12 }}
+            >
+              {modalTitle}
+            </AppText>
+            <AppText
+              size={14}
+              color={theme.textMuted}
+              style={{
+                textAlign: "center",
+                lineHeight: 22,
+                marginBottom: 32,
+              }}
+            >
+              {modalMessage}
+            </AppText>
 
-                <TouchableOpacity
-                  style={[
-                    styles.modalButton,
-                    {
-                      backgroundColor:
-                        modalType === "success" ? "#22c55e" : colors.primary,
-                    },
-                  ]}
-                  onPress={handleModalClose}
-                >
-                  <AppText size={16} weight="bold" color="#fff">
-                    {modalType === "success" ? "Done" : "Got it"}
-                  </AppText>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
+            <TouchableOpacity
+              style={[
+                styles.modalButton,
+                {
+                  backgroundColor:
+                    modalType === "success" ? "#22c55e" : theme.primary,
+                },
+              ]}
+              onPress={handleModalClose}
+            >
+              <AppText size={16} weight="bold" color="#fff">
+                {modalType === "success" ? "Done" : "Got it"}
+              </AppText>
+            </TouchableOpacity>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
     </View>
   );
@@ -773,13 +798,14 @@ export default function WithdrawScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  keyboardContainer: { flex: 1 },
+  headerGradient: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+
+  },
   headerSafeArea: {
-    borderBottomWidth: 1,
-    ...Platform.select({
-      android: {
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 4 : 12,
-      },
-    }),
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
   },
   headerRow: {
     flexDirection: "row",
@@ -788,20 +814,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
+  backButton: { padding: 8 },
+
+  mainScrollView: { flex: 1 },
+  scrollContentLayout: {
+    paddingTop: 24,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === "ios" ? 40 : 24,
   },
-  scrollView: { flex: 1 },
-  scrollContent: { padding: 16 },
+
   mainBalanceCard: {
-    padding: 20,
-    borderRadius: 20,
-    borderWidth: 1,
+    padding: 24,
+    borderRadius: 24,
+    borderWidth: 1.5,
     marginBottom: 24,
     alignItems: "center",
   },
@@ -823,105 +848,118 @@ const styles = StyleSheet.create({
     width: 1,
     height: 30,
   },
+
   errorAlertBanner: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     marginBottom: 20,
   },
+
   formCard: {
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
-    padding: 16,
-    marginBottom: 20,
+    padding: 20,
+    marginBottom: 24,
   },
   label: { marginBottom: 6 },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
   },
   pickerTrigger: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  pickerHeaderRow: {
-    flexDirection: "row",
-    width: "100%",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingBottom: 16,
-  },
-  searchBarContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-    marginBottom: 16,
-  },
-  searchIcon: { marginRight: 8 },
-  searchInputField: { flex: 1, fontSize: 14, paddingVertical: 8 },
-  bankItemRow: { width: "100%", paddingVertical: 14, borderBottomWidth: 0.5 },
+
   summaryCard: {
-    padding: 16,
-    borderRadius: 16,
+    padding: 20,
+    borderRadius: 20,
     borderWidth: 1,
     marginBottom: 24,
   },
   summaryRow: {
     flexDirection: "row",
-    marginTop: 10,
+    marginTop: 12,
     justifyContent: "space-between",
   },
+
   withdrawButton: {
-    height: 52,
-    borderRadius: 14,
+    height: 56,
+    borderRadius: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 6,
+    marginTop: 8,
+
   },
+
   noteContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 24,
-    paddingHorizontal: 6,
+    marginTop: 28,
+    paddingHorizontal: 8,
   },
+
+  /* Modal Styles - Unified */
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.55)",
   },
+  modalDismissArea: { flex: 1 },
   modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 34,
-    paddingTop: 14,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    width: "100%",
+  },
+  modalKnob: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    alignSelf: "center",
+    marginVertical: 12,
+  },
+
+  pickerHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: 24,
+    paddingBottom: 16,
   },
-  modalIndicator: {
-    width: 40,
-    height: 4,
-    backgroundColor: "rgba(150,150,150,0.4)",
-    borderRadius: 2,
-    marginBottom: 18,
+  searchBarContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 24,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 48,
+    marginBottom: 12,
   },
-  closeButton: { position: "absolute", right: 20, top: 20, padding: 4 },
-  modalIconContainer: { marginBottom: 16, marginTop: 8 },
+  searchIcon: { marginRight: 10 },
+  searchInputField: { flex: 1, fontSize: 15 },
+
+  bankItemRow: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+  },
+
+  modalIconContainer: { marginTop: 20, marginBottom: 16, alignItems: "center" },
   modalButton: {
     width: "100%",
-    height: 50,
-    borderRadius: 14,
+    height: 52,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 20,
   },
 });

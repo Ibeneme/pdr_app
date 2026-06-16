@@ -68,7 +68,7 @@ export const NegotiationStatusBanner: React.FC<
     <View
       style={[
         styles.rideStatusBanner,
-        { backgroundColor: theme.background, borderColor: theme.border },
+        { backgroundColor: theme.surface, borderColor: theme.border },
       ]}
     >
       {/* Banner Header Row */}

@@ -27,6 +27,7 @@ import {
 } from "lucide-react-native";
 import { AppText } from "@/components/AppText";
 import { NigeriaCitiesGrid } from "@/components/NigeriaCitiesGrid";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface DriverDetails {
   _id: string;
@@ -60,6 +61,7 @@ export default function JoinRideScreen() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { id } = useLocalSearchParams<{ id?: string }>();
+
   // State
   const [rides, setRides] = useState<AvailableRide[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -144,135 +146,117 @@ export default function JoinRideScreen() {
         seats: ride.availableSeats,
         negotiatorService: id,
       },
-
-      
     });
-
-
-    // router.push({
-    //   pathname: "/(details)/details",
-    //   params: {
-    //     id: ride._id,
-    //     type: "parcelrequest",
-    //     negotiatorService: id,
-    //   },
-    // })
-
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
+      {/* PREMIUM GRADIENT HEADER SECTION */}
+      <LinearGradient
+        colors={isDark ? ["#2A1B4D", colors.surface] : ["#F8F5FF", "#FFFFFF"]}
+        style={styles.headerGradient}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={[
-              styles.iconButton,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft size={22} color={colors.text} />
-          </TouchableOpacity>
-          <AppText size={18} weight="bold" color={colors.text}>
-            Find a Ride
-          </AppText>
-          <View style={{ width: 44 }} />
-        </View>
-
-        <View style={styles.filterDockRow}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setCitySelectorTarget("PICKUP")}
-            style={[
-              styles.filterPill,
-              {
-                backgroundColor: colors.background,
-                borderColor: filterPickup ? colors.primary : colors.border,
-              },
-            ]}
-          >
-            <MapPin
-              size={14}
-              color={filterPickup ? colors.primary : colors.textMuted}
-            />
-            <AppText
-              size={13}
-              weight="medium"
-              numberOfLines={1}
-              style={styles.pillText}
-              color={filterPickup ? colors.text : colors.textMuted}
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              activeOpacity={0.7}
+              onPress={() => router.back()}
             >
-              {filterPickup ? `From: ${filterPickup}` : "Select Pickup..."}
-            </AppText>
-            {filterPickup && (
-              <TouchableOpacity
-                onPress={() => setFilterPickup(null)}
-                hitSlop={12}
-              >
-                <AppText
-                  size={11}
-                  weight="bold"
-                  color={colors.textMuted}
-                  style={{ marginLeft: 4 }}
-                >
-                  ✕
-                </AppText>
-              </TouchableOpacity>
-            )}
-          </TouchableOpacity>
+              <ArrowLeft size={24} color={colors.text} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setCitySelectorTarget("DROPOFF")}
-            style={[
-              styles.filterPill,
-              {
-                backgroundColor: colors.background,
-                borderColor: filterDropoff ? colors.primary : colors.border,
-              },
-            ]}
-          >
-            <MapPin
-              size={14}
-              color={filterDropoff ? colors.primary : colors.textMuted}
-            />
-            <AppText
-              size={13}
-              weight="medium"
-              numberOfLines={1}
-              style={styles.pillText}
-              color={filterDropoff ? colors.text : colors.textMuted}
-            >
-              {filterDropoff ? `To: ${filterDropoff}` : "Select Dropoff..."}
+            <AppText size={20} weight="bold" color={colors.text}>
+              Find a Ride
             </AppText>
-            {filterDropoff && (
-              <TouchableOpacity
-                onPress={() => setFilterDropoff(null)}
-                hitSlop={12}
+
+            <View style={{ width: 40 }} />
+          </View>
+
+          {/* GEOGRAPHIC ROUTE DOCK CONTROLS */}
+          <View style={styles.filterDockRow}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setCitySelectorTarget("PICKUP")}
+              style={[
+                styles.filterPill,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.04)",
+                  borderColor: filterPickup ? colors.primary : "transparent",
+                },
+              ]}
+            >
+              <MapPin
+                size={14}
+                color={filterPickup ? colors.primary : colors.textMuted}
+              />
+              <AppText
+                size={13}
+                weight="medium"
+                numberOfLines={1}
+                style={styles.pillText}
+                color={filterPickup ? colors.text : colors.textMuted}
               >
-                <AppText
-                  size={11}
-                  weight="bold"
-                  color={colors.textMuted}
-                  style={{ marginLeft: 4 }}
+                {filterPickup ? `From: ${filterPickup}` : "Select Pickup..."}
+              </AppText>
+              {filterPickup && (
+                <TouchableOpacity
+                  onPress={() => setFilterPickup(null)}
+                  hitSlop={12}
+                  style={styles.clearPillButton}
                 >
-                  ✕
-                </AppText>
-              </TouchableOpacity>
-            )}
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+                  <AppText size={11} weight="bold" color={colors.textMuted}>
+                    ✕
+                  </AppText>
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setCitySelectorTarget("DROPOFF")}
+              style={[
+                styles.filterPill,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.04)",
+                  borderColor: filterDropoff ? colors.primary : "transparent",
+                },
+              ]}
+            >
+              <MapPin
+                size={14}
+                color={filterDropoff ? colors.primary : colors.textMuted}
+              />
+              <AppText
+                size={13}
+                weight="medium"
+                numberOfLines={1}
+                style={styles.pillText}
+                color={filterDropoff ? colors.text : colors.textMuted}
+              >
+                {filterDropoff ? `To: ${filterDropoff}` : "Select Dropoff..."}
+              </AppText>
+              {filterDropoff && (
+                <TouchableOpacity
+                  onPress={() => setFilterDropoff(null)}
+                  hitSlop={12}
+                  style={styles.clearPillButton}
+                >
+                  <AppText size={11} weight="bold" color={colors.textMuted}>
+                    ✕
+                  </AppText>
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
       {isLoading ? (
         <View style={styles.loadingContainer}>
@@ -296,7 +280,8 @@ export default function JoinRideScreen() {
         <FlatList
           data={filteredRides}
           keyExtractor={(item) => item._id}
-          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
           refreshing={isRefreshing}
           onRefresh={handleRefresh}
           ListEmptyComponent={
@@ -328,7 +313,7 @@ export default function JoinRideScreen() {
 
             return (
               <TouchableOpacity
-                activeOpacity={0.9}
+                activeOpacity={0.85}
                 onPress={() => handleRideSelection(item)}
                 style={[
                   styles.driverMarketplaceCardBox,
@@ -336,7 +321,7 @@ export default function JoinRideScreen() {
                     backgroundColor: colors.surface,
                     borderColor: item.isNegotiator
                       ? colors.primary
-                      : colors.border,
+                      : "transparent",
                     borderWidth: item.isNegotiator ? 1.5 : 1,
                   },
                 ]}
@@ -399,19 +384,16 @@ export default function JoinRideScreen() {
                           <CheckCircle2 size={14} color={colors.primary} />
                         )}
                       </View>
-                      {/* <AppText size={12} color={colors.textMuted}>
-                        ★ {item.rating || "4.8"}{" "}
-                        {isVerified ? "• Verified Driver" : ""}
-                      </AppText> */}
-
                     </View>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <AppText size={18} weight="bold" color={colors.primary}>
                       ₦
                       {item.isNegotiator && item.myNegotiation?.agreedAmount
-                        ? item.myNegotiation.agreedAmount
-                        : item.estimatedFare}
+                        ? Number(
+                            item.myNegotiation.agreedAmount
+                          ).toLocaleString()
+                        : Number(item.estimatedFare).toLocaleString()}
                     </AppText>
                     <AppText size={11} color={colors.textMuted}>
                       {item.isNegotiator ? "offered fare" : "per seat"}
@@ -433,8 +415,8 @@ export default function JoinRideScreen() {
                       ]}
                     />
                     <AppText
-                      size={13}
-                      weight="medium"
+                      size={14}
+                      weight="semibold"
                       color={colors.text}
                       numberOfLines={1}
                       style={{ flex: 1, marginLeft: 8 }}
@@ -442,12 +424,14 @@ export default function JoinRideScreen() {
                       {item.pickupPoint}
                     </AppText>
                   </View>
+
                   <View
                     style={[
                       styles.verticalConnectorLineDashed,
                       { borderColor: colors.border },
                     ]}
                   />
+
                   <View style={styles.routeWaypointTrackingRowItem}>
                     <View
                       style={[
@@ -456,8 +440,8 @@ export default function JoinRideScreen() {
                       ]}
                     />
                     <AppText
-                      size={13}
-                      weight="medium"
+                      size={14}
+                      weight="semibold"
                       color={colors.text}
                       numberOfLines={1}
                       style={{ flex: 1, marginLeft: 8 }}
@@ -568,50 +552,60 @@ export default function JoinRideScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerSafeArea: { borderBottomWidth: 1 },
+  headerGradient: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  
+  },
+  headerSafeArea: {
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
+  },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
+  backButton: {
+    padding: 8,
   },
   filterDockRow: {
     flexDirection: "row",
     paddingHorizontal: 20,
     paddingBottom: 16,
-    paddingTop: 4,
+    paddingTop: 6,
     gap: 10,
   },
   filterPill: {
     flex: 1,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1.5,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
   },
   pillText: { flex: 1, marginLeft: 6, marginRight: 2 },
+  clearPillButton: {
+    paddingLeft: 4,
+  },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
   emptyListStateFrame: {
     alignItems: "center",
     marginTop: 60,
     paddingHorizontal: 30,
   },
   driverMarketplaceCardBox: {
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginBottom: 16,
+    padding: 20,
+    borderRadius: 24,
+    marginBottom: 14,
+
     overflow: "hidden",
   },
   negotiationHeaderBadge: {
@@ -643,14 +637,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   routePathsDataDisplayBlock: {
-    padding: 12,
-    borderRadius: 14,
+    padding: 14,
+    borderRadius: 16,
     marginVertical: 14,
   },
   routeWaypointTrackingRowItem: { flexDirection: "row", alignItems: "center" },
   bulletDotNodeIndicator: { width: 8, height: 8, borderRadius: 4 },
   verticalConnectorLineDashed: {
-    height: 12,
+    height: 14,
     width: 1,
     borderLeftWidth: 1.5,
     borderStyle: "dashed",

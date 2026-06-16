@@ -476,7 +476,7 @@ export const NigeriaCitiesGrid: React.FC<NigeriaCitiesGridProps> = ({
         styles.cardWrapper,
         {
           height: city.height,
-          backgroundColor: theme.surface,
+          backgroundColor: theme.background,
           borderColor: theme.border,
         },
       ]}
@@ -523,7 +523,7 @@ export const NigeriaCitiesGrid: React.FC<NigeriaCitiesGridProps> = ({
           {
             borderColor: theme.border,
             color: theme.text,
-            backgroundColor: theme.surface,
+            backgroundColor: theme.background,
           },
         ]}
         placeholder="Search hubs, towns, states..."
@@ -549,7 +549,7 @@ export const NigeriaCitiesGrid: React.FC<NigeriaCitiesGridProps> = ({
                 style={[
                   styles.tabPill,
                   {
-                    backgroundColor: isSelected ? theme.primary : theme.surface,
+                    backgroundColor: isSelected ? theme.primary : theme.background,
                     borderColor: isSelected ? theme.primary : theme.border,
                   },
                 ]}

@@ -6,21 +6,24 @@ import {
   ScrollView,
   SafeAreaView,
   StatusBar,
-  Modal,
-  FlatList,
   ActivityIndicator,
   Image,
+  Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useDispatch } from "react-redux";
-import {
-  getAllGlobalRequests,
-  ParcelRequest,
-} from "@/api/slices/parcel.request.slice";
+import { getAllGlobalRequests } from "@/api/slices/parcel.request.slice";
 import { AppDispatch } from "@/api/store";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  ArrowLeft,
+  Handshake,
+  Lock,
+  CheckCircle2,
+  ArrowDown,
+} from "lucide-react-native";
 import { AppText } from "@/components/AppText";
+import { LinearGradient } from "expo-linear-gradient";
 
 export default function DriverMarketplaceScreen() {
   const { theme, isDark } = useTheme();
@@ -30,9 +33,6 @@ export default function DriverMarketplaceScreen() {
 
   const [parcels, setParcels] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [chatVisible, setChatVisible] = useState(false);
-  const [selectedParcel, setSelectedParcel] = useState<any | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
 
   useEffect(() => {
     if (!id) {
@@ -44,11 +44,8 @@ export default function DriverMarketplaceScreen() {
     dispatch(getAllGlobalRequests(id))
       .unwrap()
       .then((response: any) => {
-        console.warn("API Response:", response);
-
         let parcelData: any[] = [];
 
-        // Robust response handling
         if (response?.success && Array.isArray(response.data)) {
           parcelData = response.data;
         } else if (Array.isArray(response)) {
@@ -108,36 +105,39 @@ export default function DriverMarketplaceScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          {
-            backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
-          },
-        ]}
+
+      {/* PREMIUM HEADER GRADIENT */}
+      <LinearGradient
+        colors={isDark ? ["#2A1B4D", theme.surface] : ["#F8F5FF", "#FFFFFF"]}
+        style={styles.headerGradient}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
-          </TouchableOpacity>
-          <AppText style={[styles.brandText, { color: theme.text }]}>
-            {id ? "Related Requests" : "Available Requests"}
-          </AppText>
-        </View>
-      </SafeAreaView>
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+            >
+              <ArrowLeft size={24} color={theme.text} />
+            </TouchableOpacity>
+
+            <AppText size={20} weight="bold" color={theme.text}>
+              {id ? "Related Requests" : "Available Requests"}
+            </AppText>
+
+            <View style={{ width: 40 }} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
       <ScrollView
-        contentContainerStyle={styles.scrollLayout}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {!id ? (
           <View style={styles.emptyWrapper}>
-            <AppText style={{ color: theme.textMuted }}>
+            <AppText size={15} color={theme.textMuted} weight="medium">
               ID is required to view requests
             </AppText>
           </View>
@@ -147,7 +147,7 @@ export default function DriverMarketplaceScreen() {
           </View>
         ) : parcels.length === 0 ? (
           <View style={styles.emptyWrapper}>
-            <AppText style={{ color: theme.textMuted }}>
+            <AppText size={15} color={theme.textMuted} weight="medium">
               No related requests found.
             </AppText>
           </View>
@@ -156,14 +156,12 @@ export default function DriverMarketplaceScreen() {
             const clientName = parcel.user?.fullName || "Anonymous Requester";
             const clientImage = parcel.user?.profileImage;
             const negotiation = getNegotiationSummary(parcel);
-
-            // Item should be disabled if a negotiation has started/ended and this driver isn't part of it
             const isCardDisabled = parcel.isDisabled && !parcel.isNegotiator;
 
             return (
               <TouchableOpacity
                 key={parcel._id}
-                activeOpacity={isCardDisabled ? 1 : 0.9}
+                activeOpacity={isCardDisabled ? 1 : 0.85}
                 disabled={isCardDisabled}
                 onPress={() =>
                   router.push({
@@ -176,50 +174,53 @@ export default function DriverMarketplaceScreen() {
                   })
                 }
                 style={[
-                  styles.driverCard,
-                  { backgroundColor: theme.surface, borderColor: theme.border },
-                  negotiation && styles.negotiatedCard,
+                  styles.requestCard,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: isCardDisabled ? "transparent" : theme.border,
+                  },
+                  negotiation && {
+                    borderColor: theme.primary,
+                    borderWidth: 1.5,
+                  },
                   isCardDisabled && styles.disabledCard,
                 ]}
               >
-                {/* Negotiation Indicator */}
+                {/* Active Negotiation Badge */}
                 {negotiation && (
-                  <View style={styles.negotiationBadge}>
-                    <Ionicons
-                      name="chatbubble-ellipses-outline"
-                      size={16}
-                      color={theme.primary}
-                    />
-                    <AppText
-                      style={[styles.negotiationText, { color: theme.primary }]}
-                    >
-                      Negotiation • {negotiation.status}
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: `${theme.primary}15` },
+                    ]}
+                  >
+                    <Handshake size={14} color={theme.primary} />
+                    <AppText size={12} weight="bold" color={theme.primary}>
+                      Negotiation • {negotiation.status.toUpperCase()}
                       {negotiation.agreedAmount &&
-                        ` • ₦${negotiation.agreedAmount}`}
+                        ` • ₦${Number(
+                          negotiation.agreedAmount
+                        ).toLocaleString()}`}
                     </AppText>
                   </View>
                 )}
 
-                {/* Closed / Taken Indicator */}
+                {/* Ride Closed / Unavailable Badge */}
                 {isCardDisabled && (
-                  <View style={styles.disabledBadge}>
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={14}
-                      color={theme.textMuted}
-                    />
-                    <AppText
-                      style={[
-                        styles.disabledBadgeText,
-                        { color: theme.textMuted },
-                      ]}
-                    >
-                      Ride Taken / Unavailable
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: "rgba(148, 163, 184, 0.12)" },
+                    ]}
+                  >
+                    <Lock size={14} color={theme.textMuted} />
+                    <AppText size={12} weight="bold" color={theme.textMuted}>
+                      RIDE TAKEN / UNAVAILABLE
                     </AppText>
                   </View>
                 )}
 
-                {/* User Info */}
+                {/* Profile Block */}
                 <View style={styles.userInfoRow}>
                   <View style={styles.avatarWrapper}>
                     {clientImage ? (
@@ -238,72 +239,125 @@ export default function DriverMarketplaceScreen() {
                           },
                         ]}
                       >
-                        <AppText style={styles.initialsText}>
+                        <AppText size={14} weight="bold" color="#FFFFFF">
                           {getInitials(clientName)}
                         </AppText>
                       </View>
                     )}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <AppText
-                      style={[styles.clientNameText, { color: theme.text }]}
-                      numberOfLines={1}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
                     >
-                      {clientName}
-                    </AppText>
-                    <AppText style={{ color: theme.textMuted, fontSize: 12 }}>
-                      {parcel.user?.isVerified ? "✓ Verified" : "Active User"}
+                      <AppText
+                        size={15}
+                        weight="bold"
+                        color={theme.text}
+                        numberOfLines={1}
+                      >
+                        {clientName}
+                      </AppText>
+                      {parcel.user?.isVerified && (
+                        <CheckCircle2 size={14} color={theme.primary} />
+                      )}
+                    </View>
+                    <AppText size={12} color={theme.textMuted} weight="medium">
+                      {parcel.user?.isVerified
+                        ? "Verified Client"
+                        : "Active Hub User"}
                     </AppText>
                   </View>
                 </View>
 
-                {/* Route */}
+                {/* Scannable Route View Components */}
                 <View
                   style={[
-                    styles.routeBlock,
+                    styles.routePathsBlock,
                     { backgroundColor: theme.background },
                   ]}
                 >
-                  <AppText style={[styles.driverName, { color: theme.text }]}>
-                    To: {parcel.destinationCity}
-                  </AppText>
-                  <AppText
+                  <View style={styles.routeRowItem}>
+                    <View
+                      style={[
+                        styles.bulletIndicator,
+                        { backgroundColor: "#EF4444" },
+                      ]}
+                    />
+                    <AppText
+                      size={14}
+                      weight="semibold"
+                      color={theme.text}
+                      numberOfLines={1}
+                      style={styles.routeText}
+                    >
+                      {parcel.pickupAddress || "Unknown Pickup Hub"}
+                    </AppText>
+                  </View>
+
+                  <View
                     style={[
-                      styles.vehicleLabel,
-                      { color: theme.textMuted, marginTop: 4 },
+                      styles.connectorLine,
+                      { borderColor: theme.border },
                     ]}
-                  >
-                    From: {parcel.pickupAddress}
-                  </AppText>
+                  />
+
+                  <View style={styles.routeRowItem}>
+                    <View
+                      style={[
+                        styles.bulletIndicator,
+                        { backgroundColor: "#22C55E" },
+                      ]}
+                    />
+                    <AppText
+                      size={14}
+                      weight="semibold"
+                      color={theme.text}
+                      numberOfLines={1}
+                      style={styles.routeText}
+                    >
+                      {parcel.destinationCity || "Unknown Destination"}
+                    </AppText>
+                  </View>
                 </View>
 
-                <View
-                  style={[
-                    styles.innerDivider,
-                    { backgroundColor: theme.border },
-                  ]}
-                />
-
-                {/* Price */}
+                {/* Card Bottom Matrix Pricing & Tags row */}
                 <View style={styles.cardFooterRow}>
-                  <AppText
-                    style={[styles.priceMatrixText, { color: theme.text }]}
-                  >
+                  <AppText size={16} weight="bold" color={theme.text}>
                     {parcel.priceRange
                       ? `₦${parcel.priceRange.min?.toLocaleString()} - ₦${parcel.priceRange.max?.toLocaleString()}`
                       : "Negotiable"}
                   </AppText>
 
-                  {parcel.properties?.isPerishable && (
-                    <AppText style={{ color: "#f59e0b", fontSize: 12 }}>
-                      Perishable
-                    </AppText>
-                  )}
-                  {parcel.properties?.isFragile && (
-                    <AppText style={{ color: "#ef4444", fontSize: 12 }}>
-                      Fragile
-                    </AppText>
-                  )}
+                  <View style={styles.tagBadgeRow}>
+                    {parcel.properties?.isPerishable && (
+                      <View
+                        style={[
+                          styles.tagBadge,
+                          { backgroundColor: "rgba(245, 158, 11, 0.12)" },
+                        ]}
+                      >
+                        <AppText size={11} weight="bold" color="#F59E0B">
+                          PERISHABLE
+                        </AppText>
+                      </View>
+                    )}
+                    {parcel.properties?.isFragile && (
+                      <View
+                        style={[
+                          styles.tagBadge,
+                          { backgroundColor: "rgba(239, 68, 68, 0.12)" },
+                        ]}
+                      >
+                        <AppText size={11} weight="bold" color="#EF4444">
+                          FRAGILE
+                        </AppText>
+                      </View>
+                    )}
+                  </View>
                 </View>
               </TouchableOpacity>
             );
@@ -316,72 +370,72 @@ export default function DriverMarketplaceScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerSafeArea: { width: "100%" },
+  headerGradient: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+
+  },
+  headerSafeArea: {
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
+  },
   headerRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  backButton: { marginRight: 8 },
-  brandText: { fontFamily: "RethinkSans-Bold", fontSize: 20 },
-  scrollLayout: { padding: 24 },
+  backButton: { padding: 8 },
+  scrollView: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
   loaderWrapper: {
-    paddingVertical: 40,
+    paddingVertical: 60,
     justifyContent: "center",
     alignItems: "center",
   },
   emptyWrapper: {
-    paddingVertical: 40,
+    paddingVertical: 100,
     justifyContent: "center",
     alignItems: "center",
   },
-  driverCard: {
+  requestCard: {
     borderRadius: 24,
+    padding: 20,
+    marginBottom: 14,
     borderWidth: 1,
-    padding: 16,
-    marginBottom: 16,
-  },
-  negotiatedCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#10b981",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 4,
   },
   disabledCard: {
-    opacity: 0.5,
+    opacity: 0.55,
   },
-  negotiationBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(16, 185, 129, 0.08)",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginBottom: 12,
-  },
-  negotiationText: { fontSize: 13, fontWeight: "600" },
-  disabledBadge: {
+  statusBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(148, 163, 184, 0.12)",
-    paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 20,
-    marginBottom: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 14,
     alignSelf: "flex-start",
   },
-  disabledBadgeText: { fontSize: 12, fontWeight: "500" },
   userInfoRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   avatarWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     overflow: "hidden",
   },
   avatarImage: { width: "100%", height: "100%", resizeMode: "cover" },
@@ -391,20 +445,38 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  initialsText: { color: "#FFFFFF", fontWeight: "bold", fontSize: 14 },
-  clientNameText: { fontFamily: "RethinkSans-Bold", fontSize: 15 },
-  routeBlock: {
-    padding: 12,
-    borderRadius: 14,
-    marginTop: 4,
+  routePathsBlock: {
+    padding: 14,
+    borderRadius: 16,
+    marginVertical: 4,
+    marginBottom: 16,
   },
-  driverName: { fontFamily: "RethinkSans-Bold", fontSize: 15 },
-  vehicleLabel: { fontSize: 13 },
-  innerDivider: { height: 1, marginVertical: 14 },
+  routeRowItem: { flexDirection: "row", alignItems: "center" },
+  bulletIndicator: { width: 8, height: 8, borderRadius: 4 },
+  routeText: { flex: 1, marginLeft: 8 },
+  connectorLine: {
+    height: 14,
+    width: 1,
+    borderLeftWidth: 1.5,
+    borderStyle: "dashed",
+    marginLeft: 3,
+    marginVertical: 2,
+  },
   cardFooterRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.04)",
   },
-  priceMatrixText: { fontFamily: "RethinkSans-Bold", fontSize: 14 },
+  tagBadgeRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  tagBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
 });

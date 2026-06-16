@@ -782,7 +782,7 @@ export default function RideEngineScreen() {
 
           {/* Bottom Dock Input Elements */}
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
             <SafeAreaView
               style={[
@@ -885,10 +885,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginTop: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+ 
   },
 
   /* Search Control Dock Panels */
@@ -928,10 +925,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.02,
-    shadowRadius: 8,
-    elevation: 1,
+   
   },
   cardProfileRowHeaderLayout: {
     flexDirection: "row",

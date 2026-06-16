@@ -6,6 +6,7 @@ interface MessageBubbleProps {
   text: string;
   senderName?: string;
   isMyMessage: boolean;
+  status?: "sending" | "sent" | "failed";
   theme: any; // Using the theme object from context
 }
 

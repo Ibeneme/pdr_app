@@ -18,6 +18,8 @@ import { WebView } from "react-native-webview";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { AppText } from "@/components/AppText";
+import { ArrowLeft } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -31,7 +33,7 @@ import { AppDispatch } from "@/api/store";
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function WalletScreen() {
-  const { theme: colors, isDark } = useTheme();
+  const { theme, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
 
@@ -49,7 +51,6 @@ export default function WalletScreen() {
   const [webViewModalVisible, setWebViewModalVisible] = useState(false);
   const [activeReference, setActiveReference] = useState<string | null>(null);
 
-  console.warn(balance, withdrawableBalance, earnings, withdrawals, isLoading);
   const quickAmounts = [1000, 5000, 10000, 25000];
 
   useFocusEffect(
@@ -75,7 +76,7 @@ export default function WalletScreen() {
     }, [dispatch])
   );
 
-  // Calculate values wrapped inside active escrow holding locks
+  // Calculate pending escrow
   const pendingEscrowAmount = useMemo(() => {
     if (!earnings || !Array.isArray(earnings)) return 0;
     return earnings
@@ -274,270 +275,274 @@ export default function WalletScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* --- HEADER DOCK CONTAINER --- */}
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          {
-            backgroundColor: colors.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-          },
-        ]}
+      {/* PREMIUM HEADER GRADIENT */}
+      <LinearGradient
+        colors={isDark ? ["#2A1B4D", theme.surface] : ["#F8F5FF", "#FFFFFF"]}
+        style={styles.headerGradient}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={[
-              styles.iconButton,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => router.back()}
-          >
-            <AppText size={14} weight="bold" color={colors.text}>
-              Back
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={24} color={theme.text} />
+            </TouchableOpacity>
+
+            <AppText size={20} weight="bold" color={theme.text}>
+              Wallet
             </AppText>
-          </TouchableOpacity>
-          <AppText size={18} weight="bold" color={colors.text}>
-            Wallet
-          </AppText>
-          <View style={{ width: 44 }} />
-        </View>
-      </SafeAreaView>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+            <View style={{ width: 40 }} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardContainer}
       >
-        {/* --- DYNAMIC MULTI-BALANCE MASTER VIEW BOARD --- */}
-        <View
-          style={[
-            styles.balanceMasterCard,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
+        <ScrollView
+          style={styles.mainScrollView}
+          contentContainerStyle={styles.scrollContentLayout}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <AppText
-            size={12}
-            weight="bold"
-            color={colors.primary}
-            style={{ letterSpacing: 0.8 }}
-          >
-            WITHDRAWABLE BALANCE
-          </AppText>
-          <AppText
-            size={36}
-            weight="bold"
-            color={colors.text}
-            style={{ marginVertical: 4, letterSpacing: -0.5 }}
-          >
-            ₦{withdrawableBalance?.toLocaleString() || "0"}
-          </AppText>
-
+          {/* BALANCE MASTER CARD */}
           <View
-            style={[styles.balanceDivider, { backgroundColor: colors.border }]}
-          />
-
-          <View style={styles.subBalanceGrid}>
-            <View style={styles.subBalanceItem}>
-              <AppText size={11} color={colors.textMuted} weight="medium">
-                TOTAL VALUE
-              </AppText>
-              <AppText
-                size={15}
-                weight="bold"
-                color={colors.text}
-                style={{ marginTop: 2 }}
-              >
-                ₦{balance.toLocaleString()}
-              </AppText>
-            </View>
+            style={[
+              styles.balanceMasterCard,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
+          >
+            <AppText
+              size={12}
+              weight="bold"
+              color={theme.primary}
+              style={{ letterSpacing: 0.8 }}
+            >
+              WITHDRAWABLE BALANCE
+            </AppText>
+            <AppText
+              size={36}
+              weight="bold"
+              color={theme.text}
+              style={{ marginVertical: 4, letterSpacing: -0.5 }}
+            >
+              ₦{withdrawableBalance?.toLocaleString() || "0"}
+            </AppText>
 
             <View
-              style={[
-                styles.verticalDivider,
-                { backgroundColor: colors.border },
-              ]}
+              style={[styles.balanceDivider, { backgroundColor: theme.border }]}
             />
 
-            <View style={styles.subBalanceItem}>
-              <AppText size={11} color="#D97706" weight="medium">
-                HELD IN ESCROW
-              </AppText>
-              <AppText
-                size={15}
-                weight="bold"
-                color="#D97706"
-                style={{ marginTop: 2 }}
-              >
-                ₦{pendingEscrowAmount.toLocaleString()}
-              </AppText>
-            </View>
-          </View>
+            <View style={styles.subBalanceGrid}>
+              <View style={styles.subBalanceItem}>
+                <AppText size={11} color={theme.textMuted} weight="medium">
+                  TOTAL VALUE
+                </AppText>
+                <AppText
+                  size={15}
+                  weight="bold"
+                  color={theme.text}
+                  style={{ marginTop: 2 }}
+                >
+                  ₦{balance.toLocaleString()}
+                </AppText>
+              </View>
 
-          <View style={styles.balanceTwinActionsRow}>
+              <View
+                style={[
+                  styles.verticalDivider,
+                  { backgroundColor: theme.border },
+                ]}
+              />
+
+              <View style={styles.subBalanceItem}>
+                <AppText size={11} color="#D97706" weight="medium">
+                  HELD IN ESCROW
+                </AppText>
+                <AppText
+                  size={15}
+                  weight="bold"
+                  color="#D97706"
+                  style={{ marginTop: 2 }}
+                >
+                  ₦{pendingEscrowAmount.toLocaleString()}
+                </AppText>
+              </View>
+            </View>
+
             <TouchableOpacity
               style={[
                 styles.actionCellBtn,
                 {
-                  backgroundColor: colors.background,
-                  borderWidth: 1.5,
-                  borderColor: colors.border,
+                  backgroundColor: theme.background,
+                  borderColor: theme.border,
                 },
               ]}
               onPress={() => router.push("/(screens)/withdrawal")}
             >
-              <AppText size={14} weight="bold" color={colors.text}>
+              <AppText size={14} weight="bold" color={theme.text}>
                 Transfer Out
               </AppText>
             </TouchableOpacity>
           </View>
-        </View>
 
-        {/* --- RECENT TRANSACTION STREAMS --- */}
-        <View style={styles.sectionTitleLayoutDock}>
-          <AppText
-            size={11}
-            weight="bold"
-            color={colors.textMuted}
-            style={{ letterSpacing: 1.2 }}
-          >
-            ACCOUNT TRANSACTION LOGS
-          </AppText>
-          <AppText size={11} weight="bold" color={colors.primary}>
-            {transactions.length} Total Units
-          </AppText>
-        </View>
+          {/* TRANSACTIONS SECTION */}
+          <View style={styles.sectionTitleLayoutDock}>
+            <AppText
+              size={11}
+              weight="bold"
+              color={theme.textMuted}
+              style={{ letterSpacing: 1.2 }}
+            >
+              ACCOUNT TRANSACTION LOGS
+            </AppText>
+            <AppText size={11} weight="bold" color={theme.primary}>
+              {transactions.length} Total Units
+            </AppText>
+          </View>
 
-        {isLoading && transactions.length === 0 ? (
-          <ActivityIndicator
-            size="large"
-            color={colors.primary}
-            style={{ marginTop: 50 }}
-          />
-        ) : (
-          transactions.map((tx) => {
-            const isIncome = tx.type === "credit";
-            const isPending = tx.status === "PENDING ESCROW";
+          {isLoading && transactions.length === 0 ? (
+            <ActivityIndicator
+              size="large"
+              color={theme.primary}
+              style={{ marginTop: 50 }}
+            />
+          ) : (
+            transactions.map((tx) => {
+              const isIncome = tx.type === "credit";
+              const isPending = tx.status === "PENDING ESCROW";
 
-            return (
-              <TouchableOpacity
-                key={tx.id}
-                style={[
-                  styles.transactionLogCardRow,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() => setSelectedTx(tx)}
-                activeOpacity={0.9}
-              >
-                <View style={styles.txLogInternalStructure}>
-                  <View
-                    style={[
-                      styles.verticalIndicatorPillMarker,
-                      {
-                        backgroundColor: isPending
-                          ? "#D97706"
-                          : isIncome
-                          ? "#22C55E"
-                          : "#EF4444",
-                      },
-                    ]}
-                  />
-                  <View style={{ flex: 1, paddingLeft: 12 }}>
-                    <AppText
-                      size={14}
-                      weight="bold"
-                      color={colors.text}
-                      numberOfLines={1}
-                    >
-                      {tx.title}
-                    </AppText>
-                    <AppText
-                      size={12}
-                      weight="medium"
-                      color={colors.textMuted}
-                      style={{ marginVertical: 2 }}
-                    >
-                      {tx.route}
-                    </AppText>
-                    <AppText size={11} color={colors.textMuted}>
-                      {tx.date}
-                    </AppText>
-                  </View>
-                  <View
-                    style={{ alignItems: "flex-end", justifyContent: "center" }}
-                  >
-                    <AppText
-                      size={15}
-                      weight="bold"
-                      color={
-                        isPending ? "#D97706" : isIncome ? "#22C55E" : "#EF4444"
-                      }
-                    >
-                      {tx.amount}
-                    </AppText>
+              return (
+                <TouchableOpacity
+                  key={tx.id}
+                  style={[
+                    styles.transactionLogCardRow,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                  onPress={() => setSelectedTx(tx)}
+                  activeOpacity={0.9}
+                >
+                  <View style={styles.txLogInternalStructure}>
                     <View
                       style={[
-                        styles.statusMiniCapsule,
+                        styles.verticalIndicatorPillMarker,
                         {
-                          backgroundColor: colors.background,
-                          borderColor: isPending ? "#D97706" : colors.border,
+                          backgroundColor: isPending
+                            ? "#D97706"
+                            : isIncome
+                            ? "#22C55E"
+                            : "#EF4444",
                         },
                       ]}
-                    >
+                    />
+                    <View style={{ flex: 1, paddingLeft: 12 }}>
                       <AppText
-                        size={9}
+                        size={14}
                         weight="bold"
-                        color={isPending ? "#D97706" : colors.text}
+                        color={theme.text}
+                        numberOfLines={1}
                       >
-                        {tx.status.toUpperCase()}
+                        {tx.title}
+                      </AppText>
+                      <AppText
+                        size={12}
+                        weight="medium"
+                        color={theme.textMuted}
+                        style={{ marginVertical: 2 }}
+                      >
+                        {tx.route}
+                      </AppText>
+                      <AppText size={11} color={theme.textMuted}>
+                        {tx.date}
                       </AppText>
                     </View>
+                    <View
+                      style={{
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <AppText
+                        size={15}
+                        weight="bold"
+                        color={
+                          isPending
+                            ? "#D97706"
+                            : isIncome
+                            ? "#22C55E"
+                            : "#EF4444"
+                        }
+                      >
+                        {tx.amount}
+                      </AppText>
+                      <View
+                        style={[
+                          styles.statusMiniCapsule,
+                          {
+                            backgroundColor: theme.background,
+                            borderColor: isPending ? "#D97706" : theme.border,
+                          },
+                        ]}
+                      >
+                        <AppText
+                          size={9}
+                          weight="bold"
+                          color={isPending ? "#D97706" : theme.text}
+                        >
+                          {tx.status.toUpperCase()}
+                        </AppText>
+                      </View>
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
-      </ScrollView>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* ==================== MODAL 1: TRANSACTION LEDGER DETAILS LAYER ==================== */}
+      {/* ==================== TRANSACTION DETAILS MODAL ==================== */}
       <Modal
         animationType="slide"
-        transparent
+        transparent={true}
         visible={!!selectedTx}
         onRequestClose={() => setSelectedTx(null)}
       >
-        <View style={styles.modalScreenLayoutOverlayMask}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            activeOpacity={1}
+            onPress={() => setSelectedTx(null)}
+          />
           <View
             style={[
-              styles.detailModalPresentationSheet,
-              { backgroundColor: colors.surface },
+              styles.modalContent,
+              { backgroundColor: theme.surface, height: SCREEN_HEIGHT * 0.75 },
             ]}
           >
+            <View
+              style={[styles.modalKnob, { backgroundColor: theme.border }]}
+            />
+
             <View style={styles.modalHeaderActionBarLayout}>
-              <AppText size={16} weight="bold" color={colors.text}>
+              <AppText size={18} weight="bold" color={theme.text}>
                 Transaction Details
               </AppText>
               <TouchableOpacity
-                style={[
-                  styles.closeLabelActionBtn,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                  },
-                ]}
                 onPress={() => setSelectedTx(null)}
+                style={styles.closeLabelActionBtn}
               >
-                <AppText size={12} weight="bold" color={colors.text}>
+                <AppText size={14} weight="bold" color={theme.textMuted}>
                   Close
                 </AppText>
               </TouchableOpacity>
@@ -545,22 +550,22 @@ export default function WalletScreen() {
 
             {selectedTx && (
               <ScrollView
-                style={{ paddingHorizontal: 24 }}
+                style={{ paddingHorizontal: 24, flex: 1 }}
                 showsVerticalScrollIndicator={false}
               >
                 <View
                   style={[
                     styles.centerAuditHeroUnitBanner,
                     {
-                      backgroundColor: colors.background,
+                      backgroundColor: theme.background,
                       borderColor:
                         selectedTx.status === "PENDING ESCROW"
                           ? "#D97706"
-                          : colors.border,
+                          : theme.border,
                     },
                   ]}
                 >
-                  <AppText size={11} weight="bold" color={colors.textMuted}>
+                  <AppText size={11} weight="bold" color={theme.textMuted}>
                     TRANSACTION VALUE
                   </AppText>
                   <AppText
@@ -580,7 +585,7 @@ export default function WalletScreen() {
                   <AppText
                     size={11}
                     weight="bold"
-                    color={colors.text}
+                    color={theme.text}
                     numberOfLines={1}
                   >
                     Ref: {selectedTx.id}
@@ -590,20 +595,20 @@ export default function WalletScreen() {
                 <View
                   style={[
                     styles.auditFieldMetadataBlock,
-                    { borderColor: colors.border },
+                    { borderColor: theme.border },
                   ]}
                 >
                   <View style={styles.metadataSplitRowAlign}>
-                    <AppText size={13} color={colors.textMuted}>
+                    <AppText size={13} color={theme.textMuted}>
                       Service Context
                     </AppText>
-                    <AppText size={13} weight="bold" color={colors.text}>
+                    <AppText size={13} weight="bold" color={theme.text}>
                       {selectedTx.service}
                     </AppText>
                   </View>
 
                   <View style={styles.metadataSplitRowAlign}>
-                    <AppText size={13} color={colors.textMuted}>
+                    <AppText size={13} color={theme.textMuted}>
                       Status Check
                     </AppText>
                     <AppText
@@ -612,7 +617,7 @@ export default function WalletScreen() {
                       color={
                         selectedTx.status === "PENDING ESCROW"
                           ? "#D97706"
-                          : colors.text
+                          : theme.text
                       }
                     >
                       {selectedTx.status}
@@ -620,30 +625,30 @@ export default function WalletScreen() {
                   </View>
 
                   <View style={styles.metadataSplitRowAlign}>
-                    <AppText size={13} color={colors.textMuted}>
+                    <AppText size={13} color={theme.textMuted}>
                       Payer/Beneficiary
                     </AppText>
-                    <AppText size={13} weight="bold" color={colors.text}>
+                    <AppText size={13} weight="bold" color={theme.text}>
                       {selectedTx.driver}
                     </AppText>
                   </View>
 
                   {selectedTx.raw?.payerEmail && (
                     <View style={styles.metadataSplitRowAlign}>
-                      <AppText size={13} color={colors.textMuted}>
+                      <AppText size={13} color={theme.textMuted}>
                         Payer Email
                       </AppText>
-                      <AppText size={13} weight="bold" color={colors.text}>
+                      <AppText size={13} weight="bold" color={theme.text}>
                         {selectedTx.raw.payerEmail}
                       </AppText>
                     </View>
                   )}
 
                   <View style={styles.metadataSplitRowAlign}>
-                    <AppText size={13} color={colors.textMuted}>
+                    <AppText size={13} color={theme.textMuted}>
                       Timestamp
                     </AppText>
-                    <AppText size={13} weight="bold" color={colors.text}>
+                    <AppText size={13} weight="bold" color={theme.text}>
                       {selectedTx.date}
                     </AppText>
                   </View>
@@ -655,7 +660,7 @@ export default function WalletScreen() {
                     <TouchableOpacity
                       style={[
                         styles.primaryRoutingButton,
-                        { backgroundColor: colors.primary },
+                        { backgroundColor: theme.primary },
                       ]}
                       onPress={() => handleViewOrderDetails(selectedTx)}
                     >
@@ -687,59 +692,62 @@ export default function WalletScreen() {
         </View>
       </Modal>
 
-      {/* ==================== MODAL 2: INJECTION/FUND ESCROW ACCOUNT SHEET ==================== */}
+      {/* ==================== FUND ACCOUNT MODAL ==================== */}
       <Modal
         animationType="slide"
-        transparent
+        transparent={true}
         visible={fundModalVisible}
         onRequestClose={() => setFundModalVisible(false)}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalScreenLayoutOverlayMask}
+          style={styles.modalOverlay}
         >
           <View
             style={[
-              styles.fundPresentationDrawerSheet,
-              { backgroundColor: colors.surface },
+              styles.modalContent,
+              { backgroundColor: theme.surface, paddingHorizontal: 24 },
             ]}
           >
-            <View style={styles.sheetLayoutTopBarIndicator} />
+            <View
+              style={[styles.modalKnob, { backgroundColor: theme.border }]}
+            />
+
             <AppText
               size={18}
               weight="bold"
-              color={colors.text}
+              color={theme.text}
               style={{ marginBottom: 4 }}
             >
               Add Money
             </AppText>
             <AppText
               size={13}
-              color={colors.textMuted}
+              color={theme.textMuted}
               style={{ marginBottom: 20 }}
             >
               Top up your Padiman Route balance.
             </AppText>
 
-            <AppText size={11} weight="bold" color={colors.textMuted}>
+            <AppText size={11} weight="bold" color={theme.textMuted}>
               AMOUNT (₦)
             </AppText>
             <View
               style={[
                 styles.largeValueEntryBoxField,
                 {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
+                  backgroundColor: theme.background,
+                  borderColor: theme.border,
                 },
               ]}
             >
               <TextInput
-                style={[styles.textInputBoxCoreStyle, { color: colors.text }]}
+                style={[styles.textInputBoxCoreStyle, { color: theme.text }]}
                 value={fundAmount}
                 onChangeText={setFundAmount}
                 keyboardType="numeric"
                 placeholder="0.00"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={theme.textMuted}
                 autoFocus={true}
               />
             </View>
@@ -747,7 +755,7 @@ export default function WalletScreen() {
             <AppText
               size={11}
               weight="bold"
-              color={colors.textMuted}
+              color={theme.textMuted}
               style={{ marginTop: 14, marginBottom: 10 }}
             >
               QUICK PICK
@@ -759,13 +767,13 @@ export default function WalletScreen() {
                   style={[
                     styles.quickSelectionBoundsPill,
                     {
-                      backgroundColor: colors.background,
-                      borderColor: colors.border,
+                      backgroundColor: theme.background,
+                      borderColor: theme.border,
                     },
                   ]}
                   onPress={() => setFundAmount(amt.toString())}
                 >
-                  <AppText size={13} weight="bold" color={colors.text}>
+                  <AppText size={13} weight="bold" color={theme.text}>
                     ₦{amt.toLocaleString()}
                   </AppText>
                 </TouchableOpacity>
@@ -776,21 +784,21 @@ export default function WalletScreen() {
               <TouchableOpacity
                 style={[
                   styles.actionModalGridHalfBtn,
-                  { borderColor: colors.border, borderWidth: 1 },
+                  { borderColor: theme.border, borderWidth: 1 },
                 ]}
                 onPress={() => {
                   setFundModalVisible(false);
                   setFundAmount("");
                 }}
               >
-                <AppText size={14} weight="bold" color={colors.text}>
+                <AppText size={14} weight="bold" color={theme.text}>
                   Cancel
                 </AppText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
                   styles.actionModalGridHalfBtn,
-                  { backgroundColor: colors.primary },
+                  { backgroundColor: theme.primary },
                 ]}
                 onPress={handleFundAccount}
                 disabled={isLoading}
@@ -808,7 +816,7 @@ export default function WalletScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ==================== MODAL 3: INLINE PAYSTACK GATEWAY INTERFACES (WEBVIEW) ==================== */}
+      {/* ==================== PAYSTACK WEBVIEW MODAL ==================== */}
       <Modal
         animationType="fade"
         transparent={false}
@@ -844,12 +852,13 @@ export default function WalletScreen() {
             <WebView
               source={{ uri: paystackUrl }}
               onNavigationStateChange={handleWebViewNavigationStateChange}
+              onMessage={handleWebViewMessage}
               javaScriptEnabled={true}
               domStorageEnabled={true}
               startInLoadingState={true}
               renderLoading={() => (
                 <ActivityIndicator
-                  color={colors.primary}
+                  color={theme.primary}
                   size="large"
                   style={StyleSheet.absoluteFill}
                 />
@@ -864,30 +873,31 @@ export default function WalletScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  keyboardContainer: { flex: 1 },
+  headerGradient: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+
+  },
   headerSafeArea: {
-    ...Platform.select({
-      android: {
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 4 : 12,
-      },
-    }),
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  iconButton: {
-    height: 40,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
+  backButton: { padding: 8 },
+
+  mainScrollView: { flex: 1 },
+  scrollContentLayout: {
+    paddingTop: 24,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === "ios" ? 40 : 24,
   },
-  scrollView: { flex: 1 },
-  scrollContent: { padding: 20 },
+
   balanceMasterCard: {
     borderRadius: 24,
     padding: 24,
@@ -913,51 +923,58 @@ const styles = StyleSheet.create({
     width: 1,
     height: 30,
   },
-  balanceTwinActionsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 24,
-    width: "100%",
-  },
   actionCellBtn: {
     flex: 1,
-    height: 48,
-    borderRadius: 12,
-    alignItems: "center",
+    height: 52,
+    borderRadius: 16,
     justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1.5,
+    marginTop: 16,
   },
+
   sectionTitleLayoutDock: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
   },
+
   transactionLogCardRow: {
     borderRadius: 16,
     borderWidth: 1,
-    padding: 14,
-    marginBottom: 10,
+    padding: 16,
+    marginBottom: 12,
   },
   txLogInternalStructure: { flexDirection: "row", alignItems: "center" },
-  verticalIndicatorPillMarker: { width: 4, height: 38, borderRadius: 2 },
+  verticalIndicatorPillMarker: { width: 4, height: 42, borderRadius: 2 },
   statusMiniCapsule: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
     marginTop: 4,
   },
-  modalScreenLayoutOverlayMask: {
+
+  /* Modal Styles */
+  modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.55)",
   },
-  detailModalPresentationSheet: {
+  modalDismissArea: { flex: 1 },
+  modalContent: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    height: SCREEN_HEIGHT * 0.72,
-    paddingTop: 12,
+    width: "100%",
+  },
+  modalKnob: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    alignSelf: "center",
+    marginVertical: 12,
   },
   modalHeaderActionBarLayout: {
     flexDirection: "row",
@@ -967,13 +984,10 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
   },
   closeLabelActionBtn: {
-    height: 34,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
+    paddingVertical: 6,
   },
+
   centerAuditHeroUnitBanner: {
     padding: 20,
     borderRadius: 20,
@@ -1004,20 +1018,8 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     width: "100%",
   },
-  fundPresentationDrawerSheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    paddingTop: 12,
-  },
-  sheetLayoutTopBarIndicator: {
-    width: 36,
-    height: 4,
-    backgroundColor: "rgba(0,0,0,0.15)",
-    alignSelf: "center",
-    borderRadius: 2,
-    marginBottom: 18,
-  },
+
+  /* Fund Modal Specific */
   largeValueEntryBoxField: {
     height: 64,
     borderRadius: 14,
@@ -1051,7 +1053,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     marginTop: 24,
-    paddingBottom: Platform.OS === "ios" ? 16 : 0,
+    paddingBottom: Platform.OS === "ios" ? 34 : 20,
   },
   actionModalGridHalfBtn: {
     flex: 1,
@@ -1060,6 +1062,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+
+  /* WebView */
   webViewHeaderLayout: {
     height: 56,
     backgroundColor: "#F9FAFB",

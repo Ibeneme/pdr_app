@@ -95,7 +95,7 @@ export default function OtpVerificationScreen() {
   const handleResend = async () => {
     setLoading(true);
     try {
-      await dispatch(sendOtp({email})).unwrap();
+      await dispatch(sendOtp({ email })).unwrap();
       setTimer(120);
       setCanResend(false);
       triggerAlertModal(
@@ -169,16 +169,40 @@ export default function OtpVerificationScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header Title Block - Anchored cleanly to upper layout bounds */}
+        {/* Header Title Block - Anchored cleanly to upper layout bounds */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.text }]}>Verify Code</Text>
+
           <Text style={[styles.subtitle, { color: theme.textMuted }]}>
-            Sent to{" "}
-            <Text style={[styles.emailHighlight, { color: theme.text }]}>
+            We sent a code to{" "}
+            <Text
+              style={[
+                styles.emailHighlight,
+                { color: theme.text, fontWeight: "600" },
+              ]}
+            >
               {email || "your email address"}
             </Text>
           </Text>
-        </View>
 
+          <Text
+            style={{
+              color: theme.textMuted,
+              fontSize: 14.5,
+              marginTop: 8,
+              fontWeight: "500",
+          //    textAlign: "center",
+              lineHeight: 22,
+             // paddingHorizontal: 10, // Better wrapping on small screens
+            }}
+          >
+            Please check your inbox and{" "}
+            <Text style={{ color: theme.primary, fontWeight: "600" }}>
+              spam/junk folder
+            </Text>
+            .
+          </Text>
+        </View>
         {/* Input Interactive Framework Block */}
         <View style={styles.form}>
           <View style={styles.inputGroup}>
@@ -280,7 +304,7 @@ export default function OtpVerificationScreen() {
             </Text>
 
             <TouchableOpacity
-              style={[styles.sheetBtn, { backgroundColor: theme.primary}]}
+              style={[styles.sheetBtn, { backgroundColor: theme.primary }]}
               onPress={() => setAlertDialogVisible(false)}
               activeOpacity={0.8}
             >

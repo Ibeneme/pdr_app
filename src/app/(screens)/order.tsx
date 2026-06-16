@@ -8,15 +8,26 @@ import {
   Platform,
   StatusBar,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { AppText } from "@/components/AppText";
+import {
+  ArrowLeft,
+  ArrowDown,
+  Search,
+  X,
+  Package,
+  MapPin,
+  Clock,
+} from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
 
 // Redux
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/api/store";
-import { getUserAllRequests, getRequestById } from "@/api/slices/request.slice";
+import { getUserAllRequests } from "@/api/slices/request.slice";
 
 export default function MyRequestsScreen() {
   const { theme: colors, isDark } = useTheme();
@@ -31,17 +42,19 @@ export default function MyRequestsScreen() {
     "all" | "parcel" | "joinride" | "parcelrequest" | "rideoffer"
   >("all");
 
-  // Fetch all requests on mount
+  const [searchQuery, setSearchQuery] = useState("");
+
   useEffect(() => {
     dispatch(getUserAllRequests());
   }, [dispatch]);
 
-  // Filter requests based on active tab
   const getFilteredRequests = () => {
     if (!allRequests) return [];
 
+    let list: any[] = [];
+
     if (activeTab === "all") {
-      return [
+      list = [
         ...allRequests.parcels.map((item: any) => ({
           ...item,
           type: "parcel",
@@ -58,75 +71,145 @@ export default function MyRequestsScreen() {
           ...item,
           type: "rideoffer",
         })),
-      ].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      ];
+    } else {
+      switch (activeTab) {
+        case "parcel":
+          list = allRequests.parcels.map((item: any) => ({
+            ...item,
+            type: "parcel",
+          }));
+          break;
+        case "joinride":
+          list = allRequests.joinRides.map((item: any) => ({
+            ...item,
+            type: "joinride",
+          }));
+          break;
+        case "parcelrequest":
+          list = allRequests.parcelRequests.map((item: any) => ({
+            ...item,
+            type: "parcelrequest",
+          }));
+          break;
+        case "rideoffer":
+          list = allRequests.rideOffers.map((item: any) => ({
+            ...item,
+            type: "rideoffer",
+          }));
+          break;
+        default:
+          list = [];
+      }
     }
 
-    switch (activeTab) {
-      case "parcel":
-        return allRequests.parcels.map((item: any) => ({
-          ...item,
-          type: "parcel",
-        }));
-      case "joinride":
-        return allRequests.joinRides.map((item: any) => ({
-          ...item,
-          type: "joinride",
-        }));
-      case "parcelrequest":
-        return allRequests.parcelRequests.map((item: any) => ({
-          ...item,
-          type: "parcelrequest",
-        }));
-      case "rideoffer":
-        return allRequests.rideOffers.map((item: any) => ({
-          ...item,
-          type: "rideoffer",
-        }));
-      default:
-        return [];
+    if (searchQuery.trim().length > 0) {
+      const query = searchQuery.toLowerCase().trim();
+      list = list.filter((item) => {
+        const pickup = (
+          item.route?.pickupAddress ||
+          item.pickupPoint ||
+          item.pickupAddress ||
+          ""
+        ).toLowerCase();
+        const dropoff = (
+          item.route?.deliveryAddress ||
+          item.dropoffPoint ||
+          item.destinationCity ||
+          ""
+        ).toLowerCase();
+        const status = (item.status || "").toLowerCase();
+        const fare = item.estimatedFare ? String(item.estimatedFare) : "";
+        return (
+          pickup.includes(query) ||
+          dropoff.includes(query) ||
+          status.includes(query) ||
+          fare.includes(query)
+        );
+      });
     }
+
+    return list;
   };
 
   const filteredRequests = getFilteredRequests();
 
-  const handleRequestPress = (item: any) => {
-    if (!item?._id) return;
+  const groupRequestsByMonth = (items: any[]) => {
+    const groups: { [key: string]: any[] } = {};
+    const monthOrder = [
+      "january",
+      "february",
+      "march",
+      "april",
+      "may",
+      "june",
+      "july",
+      "august",
+      "september",
+      "october",
+      "november",
+      "december",
+    ];
 
-    // Navigate to details with id and type
-    router.push({
-      pathname: "/(screens)/one",
-      params: {
-        id: item._id,
-        type: item.type,
-      },
+    items.forEach((item) => {
+      let monthName = "Other";
+      if (item.createdAt) {
+        const lower = item.createdAt.toLowerCase();
+        const found = monthOrder.find((m) => lower.includes(m));
+        if (found) monthName = found.charAt(0).toUpperCase() + found.slice(1);
+      }
+      if (!groups[monthName]) groups[monthName] = [];
+      groups[monthName].push(item);
     });
 
-    // Optional: Pre-fetch detail
-    // dispatch(getRequestById({ id: item._id, type: item.type }));
+    return Object.keys(groups).sort((a, b) => {
+      if (a === "Other") return 1;
+      if (b === "Other") return -1;
+      return (
+        monthOrder.indexOf(b.toLowerCase()) -
+        monthOrder.indexOf(a.toLowerCase())
+      );
+    });
+  };
+
+  const groupedKeys = groupRequestsByMonth(filteredRequests);
+  const groupedData = groupedKeys.reduce((acc, key) => {
+    acc[key] = filteredRequests.filter((item) =>
+      key === "Other"
+        ? !item.createdAt
+        : item.createdAt?.toLowerCase().includes(key.toLowerCase())
+    );
+    return acc;
+  }, {} as { [key: string]: any[] });
+
+  const handleRequestPress = (item: any) => {
+    if (!item?._id) return;
+    router.push({
+      pathname: "/(screens)/one",
+      params: { id: item._id, type: item.type },
+    });
   };
 
   const tabs = [
     { key: "all", label: "All" },
     { key: "parcel", label: "Parcels" },
     { key: "joinride", label: "Join Ride" },
-    { key: "parcelrequest", label: "Deliver Parcel" },
-    { key: "rideoffer", label: "Ride Offers" },
+    { key: "parcelrequest", label: "Deliveries" },
+    { key: "rideoffer", label: "Offers" },
   ] as const;
 
+  // Fixed: getStatusColor function
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case "delivered":
       case "completed":
       case "active":
-        return colors.text || "#22C55E";
+        return "#9C2583";
       case "in-transit":
       case "pending":
-        return colors.text || "#EAB308";
+        return "#9C2583";
       case "cancelled":
-        return colors.text || "#EF4444";
+        return "#9C2583";
       default:
         return colors.textMuted;
     }
@@ -136,77 +219,96 @@ export default function MyRequestsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* HEADER */}
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          {
-            backgroundColor: colors.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-          },
-        ]}
+      <LinearGradient
+        colors={isDark ? [colors.surface, colors.surface] : ["#F8F5FF", "#FFFFFF"]}
+        style={styles.headerGradient}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <ArrowLeft size={24} color={colors.text} />
+            </TouchableOpacity>
+            <AppText size={20} weight="bold" color={colors.text}>
+              My Requests
+            </AppText>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <View
             style={[
-              styles.backTextButton,
+              styles.searchBarWrapper,
               {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.06)"
+                  : "rgba(0,0,0,0.04)",
               },
             ]}
-            activeOpacity={0.7}
-            onPress={() => router.back()}
           >
-            <AppText size={13} weight="bold" color={colors.text}>
-              Back
-            </AppText>
-          </TouchableOpacity>
-          <AppText size={18} weight="bold" color={colors.text}>
-            My Requests
-          </AppText>
-          <View style={{ width: 50 }} /> {/* Balance */}
-        </View>
+            <Search
+              size={18}
+              color={colors.textMuted}
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Search requests..."
+              placeholderTextColor={colors.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <X size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
 
-        {/* TABS / TOGGLES */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabContainer}
-        >
-          {tabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[
-                styles.tabButton,
-                activeTab === tab.key && {
-                  backgroundColor: colors.primary,
-                  borderColor: colors.primary,
-                },
-              ]}
-              onPress={() => setActiveTab(tab.key)}
-            >
-              <AppText
-                size={13}
-                weight={activeTab === tab.key ? "bold" : "medium"}
-                color={activeTab === tab.key ? "#FFFFFF" : colors.text}
-              >
-                {tab.label}
-              </AppText>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </SafeAreaView>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabContainer}
+          >
+            {tabs.map((tab) => {
+              const isSelected = activeTab === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[
+                    styles.tabButton,
+                    isSelected
+                      ? { backgroundColor: colors.primary }
+                      : {
+                          backgroundColor: isDark
+                            ? "rgba(255,255,255,0.05)"
+                            : "rgba(0,0,0,0.04)",
+                        },
+                  ]}
+                  onPress={() => setActiveTab(tab.key)}
+                >
+                  <AppText
+                    size={13}
+                    weight={isSelected ? "bold" : "semibold"}
+                    color={isSelected ? "#FFF" : colors.textMuted}
+                  >
+                    {tab.label}
+                  </AppText>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </LinearGradient>
 
-      {/* CONTENT */}
       {isLoading && !allRequests ? (
         <View style={styles.centeredContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : error ? (
         <View style={styles.centeredContainer}>
-          <AppText size={14} color="red" style={{ textAlign: "center" }}>
+          <AppText size={15} color="#EF4444">
             {error}
           </AppText>
         </View>
@@ -214,80 +316,162 @@ export default function MyRequestsScreen() {
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
         >
           {filteredRequests.length === 0 ? (
             <View style={styles.emptyState}>
-              <AppText size={16} color={colors.textMuted}>
-                No requests found in this category
+              <Package
+                size={72}
+                color={colors.textMuted}
+                style={{ opacity: 0.5, marginBottom: 20 }}
+              />
+              <AppText size={18} weight="bold" color={colors.textMuted}>
+                No Requests Found
+              </AppText>
+              <AppText
+                size={14}
+                color={colors.textMuted}
+                style={{ textAlign: "center", marginTop: 8 }}
+              >
+                Your requests will appear here
               </AppText>
             </View>
           ) : (
-            filteredRequests.map((item: any, index: number) => (
-              <TouchableOpacity
-                key={item._id || index}
-                style={[
-                  styles.requestCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() => handleRequestPress(item)}
-                activeOpacity={0.85}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={styles.typeBadge}>
-                    <AppText size={10} weight="bold" color={colors.primary}>
-                      {item.type.toUpperCase()}
-                    </AppText>
-                  </View>
-                  <AppText size={12} color={colors.textMuted}>
-                    {item.createdAt}
+            groupedKeys.map((monthKey) => (
+              <View key={monthKey} style={styles.monthSectionContainer}>
+                <View style={styles.monthHeaderRow}>
+                  <AppText size={14} weight="bold" color={colors.primary}>
+                    {monthKey.toUpperCase()}
                   </AppText>
+                  <View
+                    style={[
+                      styles.monthHeaderLine,
+                      { backgroundColor: colors.border },
+                    ]}
+                  />
                 </View>
 
-                <AppText
-                  size={16}
-                  weight="bold"
-                  color={colors.text}
-                  numberOfLines={1}
-                >
-                  {item.route?.pickupAddress ||
-                    item.pickupPoint ||
-                    item.pickupAddress ||
-                    "No pickup"}
-                </AppText>
+                {groupedData[monthKey].map((item: any) => {
+                  const isParcel =
+                    item.type === "parcel" || item.type === "parcelrequest";
+                  const statusColor = getStatusColor(item.status);
 
-                <AppText
-                  size={14}
-                  color={colors.textMuted}
-                  style={{ marginTop: 2 }}
-                  numberOfLines={1}
-                >
-                  →{" "}
-                  {item.route?.deliveryAddress ||
-                    item.dropoffPoint ||
-                    item.destinationCity ||
-                    "No destination"}
-                </AppText>
+                  return (
+                    <TouchableOpacity
+                      key={item._id}
+                      style={[
+                        styles.requestCard,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      onPress={() => handleRequestPress(item)}
+                      activeOpacity={0.9}
+                    >
+                      <View
+                        style={[
+                          styles.accentBar,
+                          { backgroundColor: isParcel ? "#8B5CF6" : "#22C55E" },
+                        ]}
+                      />
 
-                <View style={styles.statusRow}>
-                  <AppText
-                    size={13}
-                    weight="medium"
-                    color={getStatusColor(item.status)}
-                  >
-                    {item.status?.toUpperCase() || "PENDING"}
-                  </AppText>
+                      <View style={styles.cardContent}>
+                        <View style={styles.cardHeader}>
+                          <View style={styles.typeBadge}>
+                            <AppText
+                              size={11}
+                              weight="bold"
+                              color={colors.primary}
+                            >
+                              {item.type?.toUpperCase()}
+                            </AppText>
+                          </View>
+                          <View style={styles.dateContainer}>
+                            <Clock size={14} color={colors.textMuted} />
+                            <AppText
+                              size={12}
+                              color={colors.textMuted}
+                              style={{ marginLeft: 4 }}
+                            >
+                              {item.createdAt
+                                ? item.createdAt
+                                    .split(" ")
+                                    .slice(0, 3)
+                                    .join(" ")
+                                : ""}
+                            </AppText>
+                          </View>
+                        </View>
 
-                  {item.estimatedFare && (
-                    <AppText size={13} weight="semibold" color={colors.primary}>
-                      ₦{item.estimatedFare}
-                    </AppText>
-                  )}
-                </View>
-              </TouchableOpacity>
+                        <View style={styles.routeContainer}>
+                          <View style={styles.locationRow}>
+                            <MapPin size={18} color={colors.primary} />
+                            <AppText
+                              size={15}
+                              weight="semibold"
+                              color={colors.text}
+                              style={{ flex: 1, marginLeft: 10 }}
+                              numberOfLines={1}
+                            >
+                              {item.route?.pickupAddress ||
+                                item.pickupPoint ||
+                                item.pickupAddress ||
+                                "Unknown Pickup"}
+                            </AppText>
+                          </View>
+
+                          <View style={styles.arrowContainer}>
+                            <ArrowDown size={18} color={colors.textMuted} />
+                          </View>
+
+                          <View style={styles.locationRow}>
+                            <MapPin size={18} color="#EF4444" />
+                            <AppText
+                              size={15}
+                              weight="semibold"
+                              color={colors.text}
+                              style={{ flex: 1, marginLeft: 10 }}
+                              numberOfLines={1}
+                            >
+                              {item.route?.deliveryAddress ||
+                                item.dropoffPoint ||
+                                item.destinationCity ||
+                                "Unknown Destination"}
+                            </AppText>
+                          </View>
+                        </View>
+
+                        <View style={styles.footerRow}>
+                          {/* <View
+                            style={[
+                              styles.statusPill,
+                              { backgroundColor: statusColor + "15" },
+                            ]}
+                          >
+                            <AppText
+                              size={12}
+                              weight="bold"
+                              color={statusColor}
+                            >
+                              {item.status?.toUpperCase() || "PENDING"}
+                            </AppText>
+                          </View> */}
+
+                          {item.estimatedFare && (
+                            <AppText
+                              size={16}
+                              weight="bold"
+                              color={colors.primary}
+                            >
+                              ₦{Number(item.estimatedFare).toLocaleString()}
+                            </AppText>
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             ))
           )}
         </ScrollView>
@@ -298,79 +482,122 @@ export default function MyRequestsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerGradient: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 5,
+  },
   headerSafeArea: {
-    ...Platform.select({
-      android: {
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 4 : 12,
-      },
-    }),
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  backTextButton: {
-    height: 36,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  tabContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    gap: 8,
-  },
-  tabButton: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
+  },
+  backButton: { padding: 8 },
+
+  searchBarWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginVertical: 10,
+    paddingHorizontal: 14,
+    height: 48,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#ccc",
+  },
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, fontSize: 15 },
+
+  tabContainer: { paddingHorizontal: 16, paddingBottom: 16 },
+  tabButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 30,
     marginRight: 8,
   },
+
   scrollView: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 80,
+  scrollContent: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 40 },
+
+  monthSectionContainer: { marginBottom: 16 },
+  monthHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
+  monthHeaderLine: { flex: 1, height: 1 },
+
   requestCard: {
-    borderRadius: 18,
-    marginBottom: 14,
-    padding: 16,
+    borderRadius: 24,
+    marginBottom: 16,
+    overflow: "hidden",
     borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  accentBar: {
+    height: 6,
+    width: "100%",
+  },
+  cardContent: {
+    padding: 20,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 16,
   },
   typeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    backgroundColor: "rgba(0,0,0,0.05)",
-    borderRadius: 6,
+    backgroundColor: "rgba(139, 92, 246, 0.12)",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 30,
   },
-  statusRow: {
+  dateContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  routeContainer: { marginBottom: 16 },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  arrowContainer: {
+    alignItems: "center",
+    marginVertical: 8,
+  },
+
+  footerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 12,
+    paddingTop: 12,
+  
   },
+  statusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+
   centeredContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
-  emptyState: {
-    paddingTop: 80,
-    alignItems: "center",
-  },
+  emptyState: { paddingTop: 120, alignItems: "center" },
 });

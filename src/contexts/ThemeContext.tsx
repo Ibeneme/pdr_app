@@ -4,11 +4,11 @@ import { useColorScheme } from "react-native";
 // 1. Define our palette with deep purple shades
 const palette = {
   purpleLight: "#F3E5F5", // Backgrounds / accents
-  purpleMain: "#8B5CF6", // Primary buttons, branding
+  purpleMain: "#9C2583", // Primary buttons, branding
   purpleDark: "#4A148C", // Headings, dark backgrounds
-  white: "#FFFFFF",
+  white: "#f4f4f4",
   black: "#000",
-  grayLight: "#f4f4f4",
+  grayLight: "#fff",
   grayDark: "#121212",
   textLight: "#333333",
   textDark: "#FFFFFF",

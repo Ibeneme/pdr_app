@@ -16,6 +16,8 @@ import { AppText } from "@/components/AppText";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
+import { LinearGradient } from "expo-linear-gradient";
+import { ArrowLeft } from "lucide-react-native";
 
 export default function ReceiptScreen() {
   const { theme, isDark } = useTheme();
@@ -43,7 +45,6 @@ export default function ReceiptScreen() {
     .slice(-12)
     .toUpperCase();
 
-  // Native View-Shot Image Generation & Share Intent Pipeline
   const handleShareReceipt = async () => {
     if (isSharing) return;
     setIsSharing(true);
@@ -53,14 +54,13 @@ export default function ReceiptScreen() {
         throw new Error("Capture reference initialization failed.");
       }
 
-      // Generate local transient image file path pointer
       const localUri = await viewShotRef.current.capture();
 
       const isSharingAvailable = await Sharing.isAvailableAsync();
       if (!isSharingAvailable) {
         Alert.alert(
           "Sharing Unavailable",
-          "Native sharing platform profiles are restricted on this device."
+          "Native sharing is not available on this device."
         );
         return;
       }
@@ -71,11 +71,8 @@ export default function ReceiptScreen() {
         UTI: "public.png",
       });
     } catch (error: any) {
-      console.error("❌ [SHARE_ERROR] Processing exception caught:", error);
-      Alert.alert(
-        "Sharing Failed",
-        "Could not assemble receipt layout file graphics."
-      );
+      console.error("❌ [SHARE_ERROR]", error);
+      Alert.alert("Sharing Failed", "Could not share the receipt.");
     } finally {
       setIsSharing(false);
     }
@@ -85,73 +82,75 @@ export default function ReceiptScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* Header Context Bar */}
-      <SafeAreaView
-        style={[
-          styles.headerArea,
-          { backgroundColor: theme.surface, borderBottomColor: theme.border },
-        ]}
+      {/* PREMIUM HEADER GRADIENT */}
+      <LinearGradient
+        colors={isDark ? ["#2A1B4D", theme.surface] : ["#F8F5FF", "#FFFFFF"]}
+        style={styles.headerGradient}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.iconCircle}
-          >
-            <Ionicons name="close" size={24} color={theme.text} />
-          </TouchableOpacity>
-          <AppText size={16} weight="bold" color={theme.text}>
-            Transaction Receipt
-          </AppText>
-          <TouchableOpacity
-            style={styles.iconCircle}
-            onPress={handleShareReceipt}
-            disabled={isSharing}
-          >
-            {isSharing ? (
-              <ActivityIndicator size="small" color={theme.primary} />
-            ) : (
-              <Ionicons
-                name="share-social-outline"
-                size={20}
-                color={theme.text}
-              />
-            )}
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={24} color={theme.text} />
+            </TouchableOpacity>
+
+            <AppText size={20} weight="bold" color={theme.text}>
+              Transaction Receipt
+            </AppText>
+
+            <TouchableOpacity
+              style={styles.shareButton}
+              onPress={handleShareReceipt}
+              disabled={isSharing}
+            >
+              {isSharing ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <Ionicons
+                  name="share-social-outline"
+                  size={22}
+                  color={theme.text}
+                />
+              )}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContainer}
+        style={styles.mainScrollView}
+        contentContainerStyle={styles.scrollContentLayout}
         showsVerticalScrollIndicator={false}
       >
-        {/* VIEWSHOT CONTAINER: Captures everything inside elegantly */}
         <ViewShot
           ref={viewShotRef}
           options={{ format: "png", quality: 0.95 }}
           style={{ backgroundColor: theme.background }}
         >
-          <View style={styles.capturePadding}>
-            {/* Terminal Header Voucher Brand */}
-            <View style={styles.receiptVoucherHeader}>
-              <View style={styles.successBadgeCircle}>
-                <Ionicons name="checkmark-done" size={32} color="#FFF" />
+          <View style={styles.receiptContainer}>
+            {/* Receipt Header */}
+            <View style={styles.receiptHeader}>
+              <View style={styles.successBadge}>
+                <Ionicons name="checkmark-done" size={36} color="#FFF" />
               </View>
               <AppText
-                size={28}
+                size={32}
                 weight="bold"
                 color={theme.text}
-                style={{ marginTop: 14 }}
+                style={{ marginTop: 16 }}
               >
                 ₦{formattedAmount}
               </AppText>
               <AppText
-                size={12}
-                color="#10B981"
+                size={13}
                 weight="bold"
-                style={styles.badgeText}
+                color="#10B981"
+                style={{ marginTop: 8, letterSpacing: 0.5 }}
               >
-                <MaterialCommunityIcons name="shield-check" size={13} />{" "}
-                SECURELY PROCESSED VIA PAYSTACK
+                SECURELY PROCESSED
               </AppText>
             </View>
 
@@ -159,7 +158,7 @@ export default function ReceiptScreen() {
               style={[styles.dashedDivider, { borderColor: theme.border }]}
             />
 
-            {/* Transaction Core Properties */}
+            {/* Transaction Details */}
             <View
               style={[
                 styles.infoCard,
@@ -168,43 +167,43 @@ export default function ReceiptScreen() {
             >
               <View style={styles.dataRow}>
                 <AppText size={13} color={theme.textMuted}>
-                  Service Category
+                  Service
                 </AppText>
                 <AppText size={13} weight="bold" color={theme.text}>
                   {params.serviceType === "offer_a_ride"
-                    ? "Ride Share / Transport"
-                    : "Parcel Logistics Delivery"}
+                    ? "Ride Share"
+                    : "Parcel Delivery"}
                 </AppText>
               </View>
               <View style={styles.dataRow}>
                 <AppText size={13} color={theme.textMuted}>
-                  Payment Status
+                  Status
                 </AppText>
                 <View style={styles.statusBadge}>
                   <View
                     style={[styles.statusDot, { backgroundColor: "#10B981" }]}
                   />
-                  <AppText size={12} weight="bold" color="#10B981">
-                    {params.status || "PAID"}
+                  <AppText size={13} weight="bold" color="#10B981">
+                    {params.status?.toUpperCase() || "PAID"}
                   </AppText>
                 </View>
               </View>
               <View style={styles.dataRow}>
                 <AppText size={13} color={theme.textMuted}>
-                  Reference Hash
+                  Reference
                 </AppText>
-                <AppText size={13} weight="mono" color={theme.text}>
+                <AppText size={13} weight="bold" color={theme.text}>
                   {shortReference}
                 </AppText>
               </View>
             </View>
 
-            {/* Party Profiles */}
+            {/* Parties */}
             <AppText
-              size={11}
+              size={12}
               weight="bold"
               color={theme.textMuted}
-              style={styles.sectionLabel}
+              style={styles.sectionTitle}
             >
               PARTICIPATING PARTIES
             </AppText>
@@ -215,79 +214,74 @@ export default function ReceiptScreen() {
                 { backgroundColor: theme.surface, borderColor: theme.border },
               ]}
             >
-              {/* Payer Row */}
               <View style={styles.partyRow}>
                 <View
                   style={[
-                    styles.avatarIndicator,
+                    styles.partyIcon,
                     { backgroundColor: theme.primary + "15" },
                   ]}
                 >
                   <Ionicons
                     name="wallet-outline"
-                    size={18}
+                    size={20}
                     color={theme.primary}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <AppText size={11} color={theme.textMuted} weight="bold">
-                    PAYER / CLIENT
+                  <AppText size={12} color={theme.textMuted} weight="bold">
+                    PAYER
                   </AppText>
                   <AppText
-                    size={14}
+                    size={15}
                     weight="bold"
                     color={theme.text}
                     style={{ marginTop: 2 }}
                   >
-                    {params.payerName || "Authorized Account User"}
+                    {params.payerName || "Client"}
                   </AppText>
-                  <AppText size={12} color={theme.textMuted}>
+                  <AppText size={13} color={theme.textMuted}>
                     {params.payerEmail || "—"}
                   </AppText>
                 </View>
               </View>
 
               <View
-                style={[styles.solidDivider, { backgroundColor: theme.border }]}
+                style={[styles.divider, { backgroundColor: theme.border }]}
               />
 
-              {/* Provider Row */}
-              <View style={[styles.partyRow, { marginTop: 4 }]}>
+              <View style={styles.partyRow}>
                 <View
-                  style={[
-                    styles.avatarIndicator,
-                    { backgroundColor: "#10B98115" },
-                  ]}
+                  style={[styles.partyIcon, { backgroundColor: "#10B98115" }]}
                 >
-                  <Ionicons name="bicycle-outline" size={18} color="#10B981" />
+                  <Ionicons name="bicycle-outline" size={20} color="#10B981" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <AppText size={11} color={theme.textMuted} weight="bold">
-                    SERVICE PROVIDER
+                  <AppText size={12} color={theme.textMuted} weight="bold">
+                    PROVIDER
                   </AppText>
                   <AppText
-                    size={14}
+                    size={15}
                     weight="bold"
                     color={theme.text}
                     style={{ marginTop: 2 }}
                   >
-                    {params.providerName || "Anonymous Operator"}
+                    {params.providerName || "Service Provider"}
                   </AppText>
-                  <AppText size={12} color={theme.textMuted}>
+                  <AppText size={13} color={theme.textMuted}>
                     {params.providerEmail || "—"}
                   </AppText>
                 </View>
               </View>
             </View>
 
-            {/* Logistics Manifest */}
+            {/* Logistics */}
             <AppText
-              size={11}
+              size={12}
               weight="bold"
               color={theme.textMuted}
-              style={styles.sectionLabel}
+              style={styles.sectionTitle}
             >
-              LOGISTICS MANIFEST
+              LOGISTICS DETAILS
             </AppText>
 
             <View
@@ -297,61 +291,68 @@ export default function ReceiptScreen() {
               ]}
             >
               <View style={styles.timelineRow}>
-                <View style={styles.timelineIndicators}>
+                <View style={styles.timelineDotContainer}>
                   <Ionicons
                     name="radio-button-on"
-                    size={16}
+                    size={18}
                     color={theme.primary}
                   />
                   <View
-                    style={[styles.lineLink, { backgroundColor: theme.border }]}
+                    style={[
+                      styles.timelineLine,
+                      { backgroundColor: theme.border },
+                    ]}
                   />
-                  <Ionicons name="location" size={16} color="#EF4444" />
+                  <Ionicons name="location" size={18} color="#EF4444" />
                 </View>
-                <View style={styles.timelineContent}>
+
+                <View style={{ flex: 1 }}>
                   <View>
-                    <AppText size={11} color={theme.textMuted}>
-                      PICKUP MANIFEST LOCATION
+                    <AppText size={12} color={theme.textMuted}>
+                      PICKUP
                     </AppText>
                     <AppText
                       size={14}
                       weight="bold"
                       color={theme.text}
-                      style={{ marginTop: 2 }}
+                      style={{ marginTop: 4 }}
                     >
-                      {params.pickupAddress || "Not Disclosed"}
+                      {params.pickupAddress || "Not provided"}
                     </AppText>
                   </View>
                   <View style={{ marginTop: 20 }}>
-                    <AppText size={11} color={theme.textMuted}>
-                      BOUND TERMINAL DESTINATION
+                    <AppText size={12} color={theme.textMuted}>
+                      DESTINATION
                     </AppText>
                     <AppText
                       size={14}
                       weight="bold"
                       color={theme.text}
-                      style={{ marginTop: 2 }}
+                      style={{ marginTop: 4 }}
                     >
-                      {params.destinationCity || "Not Disclosed"}
+                      {params.destinationCity || "Not provided"}
                     </AppText>
                   </View>
                 </View>
               </View>
 
-              {params.notes && params.notes.trim().length > 0 && (
+              {params.notes && (
                 <View
                   style={[
-                    styles.notesWrapper,
-                    { backgroundColor: theme.background },
+                    styles.notesBox,
+                    {
+                      backgroundColor: theme.background,
+                      borderColor: theme.border,
+                    },
                   ]}
                 >
-                  <AppText size={11} weight="bold" color={theme.textMuted}>
-                    MANIFEST NOTES
+                  <AppText size={12} weight="bold" color={theme.textMuted}>
+                    NOTES
                   </AppText>
                   <AppText
                     size={13}
                     color={theme.text}
-                    style={{ marginTop: 4, lineHeight: 18 }}
+                    style={{ marginTop: 6, lineHeight: 20 }}
                   >
                     {params.notes}
                   </AppText>
@@ -362,18 +363,18 @@ export default function ReceiptScreen() {
         </ViewShot>
       </ScrollView>
 
-      {/* Footer Navigation Bar */}
+      {/* Bottom Action */}
       <View
         style={[
-          styles.stickyFooter,
+          styles.footer,
           { backgroundColor: theme.surface, borderTopColor: theme.border },
         ]}
       >
         <TouchableOpacity
-          style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
+          style={[styles.doneButton, { backgroundColor: theme.primary }]}
           onPress={() => router.back()}
         >
-          <AppText size={15} weight="bold" color="#FFF">
+          <AppText size={16} weight="bold" color="#FFFFFF">
             Done
           </AppText>
         </TouchableOpacity>
@@ -384,92 +385,110 @@ export default function ReceiptScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerArea: { width: "100%", borderBottomWidth: 1 },
+  headerGradient: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  headerSafeArea: {
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
+  },
   headerRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyBox: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
+    alignItems: "center",
+    paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
+  backButton: { padding: 8 },
+  shareButton: { padding: 8 },
+
+  mainScrollView: { flex: 1 },
+  scrollContentLayout: {
+    paddingTop: 24,
+    paddingHorizontal: 16,
+    paddingBottom: 100,
   },
-  scrollContainer: { padding: 4 },
-  capturePadding: { padding: 16 },
-  receiptVoucherHeader: {
-    alignItems: "center",
-    marginTop: 10,
-    marginBottom: 24,
-  },
-  successBadgeCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+
+  receiptContainer: { backgroundColor: "transparent" },
+  receiptHeader: { alignItems: "center", marginBottom: 20 },
+  successBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: "#10B981",
     justifyContent: "center",
     alignItems: "center",
   },
-  badgeText: { marginTop: 8, letterSpacing: 0.5 },
+
   dashedDivider: {
-    width: "100%",
-    height: 1,
     borderWidth: 1,
     borderStyle: "dashed",
-    marginBottom: 24,
-    borderRadius: 1,
+    marginVertical: 20,
   },
-  solidDivider: { width: "100%", height: 1, marginVertical: 14 },
+  divider: { height: 1, marginVertical: 16 },
+
   infoCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 20,
-    gap: 14,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    padding: 20,
+    marginBottom: 24,
   },
   dataRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingVertical: 8,
   },
-  sectionLabel: { letterSpacing: 1, marginBottom: 8, marginLeft: 4 },
+  sectionTitle: {
+    letterSpacing: 1.2,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#10B98110",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: "#10B98115",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  partyRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  avatarIndicator: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+
+  partyRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  partyIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },
-  timelineRow: { flexDirection: "row", gap: 12 },
-  timelineIndicators: { alignItems: "center", paddingVertical: 2 },
-  lineLink: { width: 2, flex: 1, marginVertical: 4 },
-  timelineContent: { flex: 1 },
-  notesWrapper: { padding: 12, borderRadius: 12, marginTop: 14 },
-  stickyFooter: {
+
+  timelineRow: { flexDirection: "row", gap: 16 },
+  timelineDotContainer: { alignItems: "center", paddingVertical: 4 },
+  timelineLine: { width: 2, flex: 1, marginVertical: 6 },
+
+  notesBox: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+
+  footer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: Platform.OS === "ios" ? 36 : 20,
     borderTopWidth: 1,
   },
-  primaryBtn: {
-    height: 50,
-    borderRadius: 14,
+  doneButton: {
+    height: 56,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
   },

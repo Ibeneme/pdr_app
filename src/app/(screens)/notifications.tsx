@@ -21,15 +21,25 @@ import {
   markNotificationAsRead,
   markAllNotificationsAsRead,
 } from "@/api/slices/notification.slice";
+import { getUser } from "@/api/secureStore";
 
 export default function NotificationsScreen() {
   const { theme: colors, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
 
   const { notifications, unreadCount, isLoading, error } = useSelector(
     (state: RootState) => state.notification
   );
+
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      const user = await getUser();
+      setCurrentUser(user);
+    };
+    fetchCurrentUser();
+  }, []);
 
   // Fetch notifications on component initialization
   useEffect(() => {
@@ -39,92 +49,39 @@ export default function NotificationsScreen() {
   const handleNotificationClick = async (notification: any) => {
     if (!notification) return;
 
-    // 1. Mark as read immediately on user interaction hook if not already read
+    // 1. Mark as read
     if (!notification.read && notification._id) {
       dispatch(markNotificationAsRead(notification._id));
     }
 
-    // // Extract custom nested data context payloads safely
-    // const payloadData = notification?.data || {};
+    const payloadData = notification.data || {};
+    const negotiation = payloadData.negotiation;
 
-    // if (notification.type === "WITHDRAWAL") {
-    //   return router.push("/(screens)/wallet");
-    // }
+    // 2. Routing logic for CHAT_SCREEN
+    if (
+      notification.type === "MESSAGE" ||
+      payloadData.router === "CHAT_SCREEN"
+    ) {
+      if (!negotiation) return;
 
-    // // 2. Intercept PAYMENT type notifications to route using the transaction service properties
-    // if (notification.type === "PAYMENT") {
-    //   const serviceId = payloadData.serviceId;
-    //   const serviceType = payloadData.serviceType;
+      return router.push({
+        pathname: "/(details)/ChatScreen",
+        params: {
+          id: negotiation._id,
+          parcelId: negotiation.service, // Mapping your service ID to parcelId
+          isServiceProvider: String(negotiation.isProvider),
+          currentUserId: String(currentUser?._id || currentUser?.id),
+        },
+      });
+    }
 
-    //   console.log(
-    //     `🛎️ [PAYMENT ROUTING] Service ID: ${serviceId}, Type: ${serviceType}`
-    //   );
-
-    //   if (!serviceId) {
-    //     console.warn(
-    //       "⚠️ Missing serviceId in payment notification context payload."
-    //     );
-    //     return;
-    //   }
-
-    //   // A. Route to Deliver a Parcel Screen Context
-    //   if (serviceType === "deliver_a_parcel") {
-    //     return router.push({
-    //       pathname: "/(details)/details",
-    //       params: { id: serviceId },
-    //     });
-    //   }
-
-    //   // B. Route to Ride Offer / Ride Join Screen Context
-    //   if (serviceType === "ride_offer" || serviceType === "ride_join") {
-    //     return router.push({
-    //       pathname: "/(details)/ride",
-    //       params: {
-    //         id: serviceId,
-    //         driverName: payloadData.payerName || "Driver",
-    //         pickup: "View Details",
-    //         dropoff: "View Details",
-    //         fare: payloadData.amount || "",
-    //         seats: 1,
-    //       },
-    //     });
-    //   }
-    // }
-
-    // // =====================================================================
-    // // 3. Fallback Routing Structure (For reference/orders/standard notifications)
-    // // =====================================================================
-    // const targetType = payloadData.type || notification.type;
-    // const targetId =
-    //   payloadData.id || payloadData.serviceId || notification._id;
-
-    // if (
-    //   targetType === "ride_offer" ||
-    //   targetType === "ride_join" ||
-    //   notification.type === "RIDE"
-    // ) {
-    //   return router.push({
-    //     pathname: "/(details)/ride",
-    //     params: {
-    //       id: targetId,
-    //       driverName:
-    //         payloadData.driverName || payloadData.driver?.name || "Driver",
-    //       driverPhone:
-    //         payloadData.driverPhone || payloadData.driver?.phone || "",
-    //       pickup: payloadData.pickupPoint || payloadData.pickup || "Details",
-    //       dropoff: payloadData.dropoffPoint || payloadData.dropoff || "Details",
-    //       fare: payloadData.amount || payloadData.fare || "",
-    //       time: payloadData.departureTime || "",
-    //       seats: payloadData.availableSeats || 1,
-    //     },
-    //   });
-    // } else {
-    //   // General fallback to detail route mapping
-    //   return router.push({
-    //     pathname: "/(details)/details",
-    //     params: { id: targetId },
-    //   });
-    // }
+    // 3. Optional: Routing for standard Detail screens
+    if (payloadData.negotiationId) {
+      return router.push({
+        pathname: "/(details)/details",
+        params: { id: payloadData.negotiationId },
+      });
+    }
   };
 
   const handleMarkAllAsRead = () => {

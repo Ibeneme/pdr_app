@@ -1,18 +1,14 @@
 import React, { useState } from "react";
 import {
   StyleSheet,
-  Text,
   View,
-  TouchableOpacity,
   ScrollView,
   SafeAreaView,
-  TextInput,
-  Switch,
-  Platform,
   StatusBar,
-  Modal,
+  Platform,
   KeyboardAvoidingView,
-  ActivityIndicator,
+  TouchableOpacity,
+  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -24,52 +20,22 @@ import { AppDispatch } from "@/api/store";
 import { createParcelBooking } from "@/api/slices/parcel.slice";
 import { NigeriaCitiesGrid } from "@/components/NigeriaCitiesGrid";
 import { AppText } from "@/components/AppText";
+import { ArrowLeft } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
 
-export interface ParcelBooking {
-  _id: string;
-  requestedBy: string | any;
-  route: {
-    pickupAddress: string;
-    deliveryAddress: string;
-  };
-  parties: {
-    sender: {
-      fullName: string;
-      contact: string;
-    };
-    recipient: {
-      fullName: string;
-      contact: string;
-    };
-  };
-  item: {
-    name: string;
-    properties: {
-      isFragile: boolean;
-      isPerishable: boolean;
-      isInsured: boolean;
-    };
-  };
-  schedule: {
-    type: string;
-    date: string;
-  };
-  status: "pending" | "assigned" | "in-transit" | "delivered" | "cancelled";
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import LocationSelector from "@/components/LocationSelector";
+import PartyDetailsSection from "@/components/PartyDetailsSection";
+import ItemDetailsSection from "@/components/ItemDetailsSection";
+import SpecialHandlingSection from "@/components/SpecialHandlingSection";
+import DispatchScheduleSection from "@/components/DispatchScheduleSection";
+import OrderSummaryModal from "@/components/OrderSummaryModal";
 
 export default function BookParcelDeliveryScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
 
-  // Local state for tracking loading and errors
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // --- Form Local State Management ---
+  // Form States
   const [pickupAddress, setPickupAddress] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
 
@@ -83,17 +49,19 @@ export default function BookParcelDeliveryScreen() {
   const [isPerishable, setIsPerishable] = useState(false);
   const [isInsured, setIsInsured] = useState(false);
 
-  // Dispatch Date Configurations
   const [dispatchDate, setDispatchDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isImpromptu, setIsImpromptu] = useState(true);
 
-  // Dynamic Location Selector Modal Targets
+  // UI States
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [createdBooking, setCreatedBooking] = useState<any>(null);
+
+  // Modals
   const [locationSelectionTarget, setLocationSelectionTarget] = useState<
     "PICKUP" | "DELIVERY" | null
   >(null);
-
-  // Bottom Sheet Modal Management
   const [overviewModalVisible, setOverviewModalVisible] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState<
     "idle" | "success" | "error"
@@ -117,7 +85,7 @@ export default function BookParcelDeliveryScreen() {
       !recipientContact.trim() ||
       !itemName.trim()
     ) {
-      setError("Please fill out all missing details before continuing.");
+      setError("Please fill out all required fields.");
       setSubmissionStatus("error");
       setOverviewModalVisible(true);
       return;
@@ -129,28 +97,15 @@ export default function BookParcelDeliveryScreen() {
   };
 
   const handleConfirmSubmit = async () => {
-    const parcelPayload: Partial<ParcelBooking> = {
-      route: {
-        pickupAddress,
-        deliveryAddress,
-      },
+    const parcelPayload = {
+      route: { pickupAddress, deliveryAddress },
       parties: {
-        sender: {
-          fullName: senderName,
-          contact: senderContact,
-        },
-        recipient: {
-          fullName: recipientName,
-          contact: recipientContact,
-        },
+        sender: { fullName: senderName, contact: senderContact },
+        recipient: { fullName: recipientName, contact: recipientContact },
       },
       item: {
         name: itemName,
-        properties: {
-          isFragile,
-          isPerishable,
-          isInsured,
-        },
+        properties: { isFragile, isPerishable, isInsured },
       },
       schedule: {
         type: isImpromptu ? "immediate" : "scheduled",
@@ -162,33 +117,38 @@ export default function BookParcelDeliveryScreen() {
       notes: "Parcel booked via mobile app",
     };
 
+    console.log("🚀 [SUBMIT] Parcel Payload:", parcelPayload);
+
     setLoading(true);
     setError(null);
 
     try {
-      const resultAction = await dispatch(createParcelBooking(parcelPayload));
+      const resultAction = await dispatch(
+        createParcelBooking(parcelPayload as any)
+      );
 
       if (createParcelBooking.fulfilled.match(resultAction)) {
+        console.log("✅ [SUCCESS] Booking Created:", resultAction.payload);
         setSubmissionStatus("success");
+        setCreatedBooking(resultAction.payload);
       } else {
+        console.log("❌ [FAILED] Booking Failed");
         setSubmissionStatus("error");
         setError("We couldn't save your delivery request. Please try again.");
       }
-    } catch (err) {
-      console.error("[FORM SUBMIT]", err);
+    } catch (err: any) {
+      console.error("💥 [ERROR] Submit failed:", err);
       setSubmissionStatus("error");
-      setError("Something went wrong on our end. Please try again.");
+      setError(err?.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const selectHubValue = (hubName: string) => {
-    if (locationSelectionTarget === "PICKUP") {
-      setPickupAddress(hubName);
-    } else if (locationSelectionTarget === "DELIVERY") {
+    if (locationSelectionTarget === "PICKUP") setPickupAddress(hubName);
+    else if (locationSelectionTarget === "DELIVERY")
       setDeliveryAddress(hubName);
-    }
     setLocationSelectionTarget(null);
   };
 
@@ -196,389 +156,113 @@ export default function BookParcelDeliveryScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* HEADER SECTION */}
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          {
-            backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
-          },
-        ]}
+      {/* PREMIUM HEADER GRADIENT */}
+      <LinearGradient
+        colors={isDark ? ["#2A1B4D", theme.surface] : ["#F8F5FF", "#FFFFFF"]}
+        style={styles.headerGradient}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[
-              styles.iconButton,
-              { backgroundColor: theme.background, borderColor: theme.border },
-            ]}
-            activeOpacity={0.6}
-          >
-            <AppText style={[styles.backTextButton, { color: theme.text }]}>
-              ←
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={24} color={theme.text} />
+            </TouchableOpacity>
+
+            <AppText size={20} weight="bold" color={theme.text}>
+              Send a Delivery
             </AppText>
-          </TouchableOpacity>
-          <AppText style={[styles.brandText, { color: theme.text }]}>
-            Send a Delivery
-          </AppText>
-          <View style={{ width: 42 }} />
-        </View>
-      </SafeAreaView>
+
+            <View style={{ width: 40 }} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardContainer}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
       >
         <ScrollView
-          style={styles.mainScrollContainer}
+          style={styles.mainScrollView}
           contentContainerStyle={styles.scrollContentLayout}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* SECTION 1: ROUTE LOCATIONS */}
-          <AppText style={[styles.sectionTitle, { color: theme.textMuted }]}>
-            DELIVERY ROUTE
-          </AppText>
+          <LocationSelector
+            pickupAddress={pickupAddress}
+            deliveryAddress={deliveryAddress}
+            onPickupPress={() => setLocationSelectionTarget("PICKUP")}
+            onDeliveryPress={() => setLocationSelectionTarget("DELIVERY")}
+          />
 
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={[
-              styles.clickableInputContainer,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-            onPress={() => setLocationSelectionTarget("PICKUP")}
-          >
-            <AppText
-              numberOfLines={1}
-              style={[
-                styles.selectTextLabel,
-                { color: pickupAddress ? theme.text : theme.textMuted },
-              ]}
-            >
-              {pickupAddress || "Where should we pick up from?"}
-            </AppText>
-            <AppText
-              style={{ fontSize: 12, color: theme.primary, fontWeight: "bold" }}
-            >
-              Select
-            </AppText>
-          </TouchableOpacity>
+          <PartyDetailsSection
+            type="sender"
+            name={senderName}
+            contact={senderContact}
+            onNameChange={setSenderName}
+            onContactChange={setSenderContact}
+          />
 
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={[
-              styles.clickableInputContainer,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-            onPress={() => setLocationSelectionTarget("DELIVERY")}
-          >
-            <AppText
-              numberOfLines={1}
-              style={[
-                styles.selectTextLabel,
-                { color: deliveryAddress ? theme.text : theme.textMuted },
-              ]}
-            >
-              {deliveryAddress || "Where should we deliver to?"}
-            </AppText>
-            <AppText
-              style={{ fontSize: 12, color: theme.primary, fontWeight: "bold" }}
-            >
-              Select
-            </AppText>
-          </TouchableOpacity>
+          <PartyDetailsSection
+            type="recipient"
+            name={recipientName}
+            contact={recipientContact}
+            onNameChange={setRecipientName}
+            onContactChange={setRecipientContact}
+          />
 
-          {/* SECTION 2: SENDER DETAILS */}
-          <AppText
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 14 },
-            ]}
-          >
-            SENDER INFORMATION
-          </AppText>
-          <View style={styles.gridContainer}>
-            <View
-              style={[
-                styles.flexInputWrapper,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <TextInput
-                placeholder="Your Name"
-                placeholderTextColor={theme.textMuted}
-                style={[styles.flexTextInput, { color: theme.text }]}
-                value={senderName}
-                onChangeText={setSenderName}
-              />
-            </View>
-            <View
-              style={[
-                styles.flexInputWrapper,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <TextInput
-                placeholder="Phone Number"
-                placeholderTextColor={theme.textMuted}
-                keyboardType="phone-pad"
-                style={[styles.flexTextInput, { color: theme.text }]}
-                value={senderContact}
-                onChangeText={setSenderContact}
-              />
-            </View>
-          </View>
+          <ItemDetailsSection
+            itemName={itemName}
+            onItemNameChange={setItemName}
+            isFragile={isFragile}
+            isPerishable={isPerishable}
+            isInsured={isInsured}
+            onFragileChange={setIsFragile}
+            onPerishableChange={setIsPerishable}
+            onInsuredChange={setIsInsured}
+          />
 
-          {/* SECTION 3: RECIPIENT DETAILS */}
-          <AppText
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 6 },
-            ]}
-          >
-            RECIPIENT INFORMATION
-          </AppText>
-          <View style={styles.gridContainer}>
-            <View
-              style={[
-                styles.flexInputWrapper,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <TextInput
-                placeholder="Receiver's Name"
-                placeholderTextColor={theme.textMuted}
-                style={[styles.flexTextInput, { color: theme.text }]}
-                value={recipientName}
-                onChangeText={setRecipientName}
-              />
-            </View>
-            <View
-              style={[
-                styles.flexInputWrapper,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <TextInput
-                placeholder="Phone Number"
-                placeholderTextColor={theme.textMuted}
-                keyboardType="phone-pad"
-                style={[styles.flexTextInput, { color: theme.text }]}
-                value={recipientContact}
-                onChangeText={setRecipientContact}
-              />
-            </View>
-          </View>
+          <SpecialHandlingSection
+            isFragile={isFragile}
+            isPerishable={isPerishable}
+            isInsured={isInsured}
+            onFragileChange={setIsFragile}
+            onPerishableChange={setIsPerishable}
+            onInsuredChange={setIsInsured}
+          />
 
-          {/* SECTION 4: ITEM DESCRIPTION */}
-          <AppText
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 14 },
-            ]}
-          >
-            ITEM DETAILS
-          </AppText>
-          <View
-            style={[
-              styles.inputContainer,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-          >
-            <TextInput
-              placeholder="What are you sending? (e.g. Documents, Clothes)"
-              placeholderTextColor={theme.textMuted}
-              style={[styles.textInput, { color: theme.text }]}
-              value={itemName}
-              onChangeText={setItemName}
-            />
-          </View>
+          <DispatchScheduleSection
+            isImpromptu={isImpromptu}
+            dispatchDate={dispatchDate}
+            showDatePicker={showDatePicker}
+            onImpromptuChange={setIsImpromptu}
+            onSchedulePress={() => {
+              setIsImpromptu(false);
+              setShowDatePicker(true);
+            }}
+            onDateChange={onDateChange}
+            onClosePicker={() => setShowDatePicker(false)}
+          />
 
-          {/* SECTION 5: TOGGLE PREFERENCES */}
-          <AppText
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 14 },
-            ]}
-          >
-            SPECIAL HANDLING
-          </AppText>
-          <View
-            style={[
-              styles.toggleBlockCard,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-          >
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleTextContent}>
-                <AppText style={[styles.toggleTitle, { color: theme.text }]}>
-                  Fragile Item
-                </AppText>
-                <AppText
-                  style={[styles.toggleDesc, { color: theme.textMuted }]}
-                >
-                  Needs gentle handling and extra care
-                </AppText>
-              </View>
-              <Switch
-                value={isFragile}
-                onValueChange={setIsFragile}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={Platform.OS === "android" ? "#FFFFFF" : undefined}
-              />
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleTextContent}>
-                <AppText style={[styles.toggleTitle, { color: theme.text }]}>
-                  Perishable Item
-                </AppText>
-                <AppText
-                  style={[styles.toggleDesc, { color: theme.textMuted }]}
-                >
-                  Spoils easily or time-sensitive
-                </AppText>
-              </View>
-              <Switch
-                value={isPerishable}
-                onValueChange={setIsPerishable}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={Platform.OS === "android" ? "#FFFFFF" : undefined}
-              />
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-            {/* <View style={styles.toggleRow}>
-              <View style={styles.toggleTextContent}>
-                <AppText style={[styles.toggleTitle, { color: theme.text }]}>
-                  Insured Item
-                </AppText>
-                <AppText
-                  style={[styles.toggleDesc, { color: theme.textMuted }]}
-                >
-                  Protect against loss or damage
-                </AppText>
-              </View>
-              <Switch
-                value={isInsured}
-                onValueChange={setIsInsured}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={Platform.OS === "android" ? "#FFFFFF" : undefined}
-              />
-            </View> */}
-          </View>
-
-          {/* SECTION 6: DISPATCH SCHEDULER */}
-          <AppText
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 14 },
-            ]}
-          >
-            WHEN SHOULD WE SEND IT?
-          </AppText>
-          <View style={styles.gridContainer}>
-            <TouchableOpacity
-              style={[
-                styles.selectableTab,
-                {
-                  backgroundColor: isImpromptu ? theme.primary : theme.surface,
-                  borderColor: isImpromptu ? theme.primary : theme.border,
-                },
-              ]}
-              onPress={() => setIsImpromptu(true)}
-            >
-              <AppText
-                style={[
-                  styles.tabText,
-                  { color: isImpromptu ? "#FFFFFF" : theme.text },
-                ]}
-              >
-                Send Now
-              </AppText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.selectableTab,
-                {
-                  backgroundColor: !isImpromptu ? theme.primary : theme.surface,
-                  borderColor: !isImpromptu ? theme.primary : theme.border,
-                },
-              ]}
-              onPress={() => {
-                setIsImpromptu(false);
-                setShowDatePicker(true);
-              }}
-            >
-              <AppText
-                style={[
-                  styles.tabText,
-                  { color: !isImpromptu ? "#FFFFFF" : theme.text },
-                ]}
-              >
-                {isImpromptu
-                  ? "Schedule Later"
-                  : dispatchDate.toLocaleDateString()}
-              </AppText>
-            </TouchableOpacity>
-          </View>
-
-          {showDatePicker && (
-            <View
-              style={[
-                styles.pickerInlineContainer,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <DateTimePicker
-                value={dispatchDate}
-                mode="date"
-                display="spinner"
-                onChange={onDateChange}
-                minimumDate={new Date()}
-              />
-              {Platform.OS === "ios" && (
-                <TouchableOpacity
-                  style={styles.closePickerBtn}
-                  onPress={() => setShowDatePicker(false)}
-                >
-                  <AppText
-                    style={{
-                      color: theme.primary,
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Select Date
-                  </AppText>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
-          {/* REVIEW ACTION SUBMIT */}
+          {/* Review Button */}
           <TouchableOpacity
             style={[
               styles.primarySubmitButton,
-              { backgroundColor: theme.primary, marginTop: 20 },
+              { backgroundColor: theme.primary },
             ]}
             onPress={handleOpenOverview}
             activeOpacity={0.85}
           >
-            <AppText style={styles.submitButtonText}>
+            <AppText size={16} weight="bold" color="#FFFFFF">
               Review Order Summary
             </AppText>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ====================== GEOGRAPHIC CITIES CONFIGURATOR MODAL ====================== */}
+      {/* Cities Selection Modal */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -593,37 +277,33 @@ export default function BookParcelDeliveryScreen() {
           />
           <View
             style={[
+              styles.modalContent,
               {
                 backgroundColor: theme.surface,
                 paddingTop: 16,
                 height: "80%",
-                width: "100%",
               },
             ]}
           >
             <View
               style={[styles.modalKnob, { backgroundColor: theme.border }]}
             />
+
             <AppText
-              style={[
-                styles.modalTitle,
-                { color: theme.text, paddingHorizontal: 24, marginBottom: 4 },
-              ]}
+              size={18}
+              weight="bold"
+              color={theme.text}
+              style={{ paddingHorizontal: 24, marginBottom: 4 }}
             >
               Select{" "}
-              {locationSelectionTarget === "PICKUP"
-                ? "Pickup Hub"
-                : "Delivery Hub"}
+              {locationSelectionTarget === "PICKUP" ? "Pickup" : "Delivery"} Hub
             </AppText>
             <AppText
-              style={{
-                fontSize: 13,
-                color: theme.textMuted,
-                paddingHorizontal: 24,
-                marginBottom: 12,
-              }}
+              size={13}
+              color={theme.textMuted}
+              style={{ paddingHorizontal: 24, marginBottom: 16 }}
             >
-              Choose a specific city center or state logistical point.
+              Isolate freight routing endpoints within local transit nets.
             </AppText>
 
             <View style={{ flex: 1 }}>
@@ -640,15 +320,13 @@ export default function BookParcelDeliveryScreen() {
             >
               <TouchableOpacity
                 style={[
-                  styles.primarySubmitButton,
+                  styles.cancelModalButton,
                   { backgroundColor: theme.border },
                 ]}
                 onPress={() => setLocationSelectionTarget(null)}
               >
-                <AppText
-                  style={[styles.submitButtonText, { color: theme.text }]}
-                >
-                  Cancel
+                <AppText size={15} weight="bold" color={theme.text}>
+                  Cancel Selection
                 </AppText>
               </TouchableOpacity>
             </View>
@@ -656,219 +334,37 @@ export default function BookParcelDeliveryScreen() {
         </View>
       </Modal>
 
-      {/* BOTTOM MODAL SHEET FOR OVERVIEW, SUCCESS & ERRORS */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      {/* Order Summary Modal */}
+      <OrderSummaryModal
         visible={overviewModalVisible}
-        onRequestClose={() => setOverviewModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={styles.modalDismissArea}
-            activeOpacity={1}
-            onPress={() => setOverviewModalVisible(false)}
-          />
-          <View
-            style={[
-              styles.bottomModalContainer,
-              { backgroundColor: theme.surface },
-            ]}
-          >
-            <View
-              style={[styles.modalKnob, { backgroundColor: theme.border }]}
-            />
-
-            {submissionStatus === "idle" && (
-              <View>
-                <AppText style={[styles.modalTitle, { color: theme.text }]}>
-                  Order Summary
-                </AppText>
-
-                <View
-                  style={[
-                    styles.modalOverviewBlock,
-                    { borderColor: theme.border },
-                  ]}
-                >
-                  <AppText
-                    style={[styles.summaryItemText, { color: theme.text }]}
-                  >
-                    <AppText style={{ color: theme.textMuted }}>Item:</AppText>{" "}
-                    {itemName || "Not specified"}
-                  </AppText>
-                  <AppText
-                    style={[styles.summaryItemText, { color: theme.text }]}
-                  >
-                    <AppText style={{ color: theme.textMuted }}>Route:</AppText>{" "}
-                    {pickupAddress || "Empty"} ➔ {deliveryAddress || "Empty"}
-                  </AppText>
-                  <AppText
-                    style={[styles.summaryItemText, { color: theme.text }]}
-                  >
-                    <AppText style={{ color: theme.textMuted }}>
-                      Sender:
-                    </AppText>{" "}
-                    {senderName} ({senderContact})
-                  </AppText>
-                  <AppText
-                    style={[styles.summaryItemText, { color: theme.text }]}
-                  >
-                    <AppText style={{ color: theme.textMuted }}>
-                      Receiver:
-                    </AppText>{" "}
-                    {recipientName} ({recipientContact})
-                  </AppText>
-                  <AppText
-                    style={[styles.summaryItemText, { color: theme.text }]}
-                  >
-                    <AppText style={{ color: theme.textMuted }}>
-                      Handling:
-                    </AppText>{" "}
-                    {isFragile ? "Fragile" : ""}{" "}
-                    {isPerishable ? "Perishable" : ""}{" "}
-                    {isInsured ? "Insured" : ""}
-                  </AppText>
-                  <AppText
-                    style={[styles.summaryItemText, { color: theme.text }]}
-                  >
-                    <AppText style={{ color: theme.textMuted }}>
-                      Delivery Time:
-                    </AppText>{" "}
-                    {isImpromptu
-                      ? "As soon as possible (Now)"
-                      : dispatchDate.toDateString()}
-                  </AppText>
-                </View>
-
-                <TouchableOpacity
-                  style={[
-                    styles.primarySubmitButton,
-                    { backgroundColor: theme.primary, marginTop: 12 },
-                  ]}
-                  onPress={handleConfirmSubmit}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <AppText style={styles.submitButtonText}>
-                      Confirm and Book Order
-                    </AppText>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {submissionStatus === "success" && (
-              <View style={styles.statusWrapper}>
-                <View
-                  style={[
-                    styles.statusIndicatorCircle,
-                    { backgroundColor: "#34C75920" },
-                  ]}
-                >
-                  <AppText
-                    style={{
-                      color: "#34C759",
-                      fontSize: 32,
-                      fontWeight: "bold",
-                    }}
-                  >
-                    ✓
-                  </AppText>
-                </View>
-                <AppText
-                  style={[styles.statusTitleText, { color: theme.text }]}
-                >
-                  Delivery Booked Successfully!
-                </AppText>
-                <AppText
-                  style={[styles.statusBodyText, { color: theme.textMuted }]}
-                >
-                  Your delivery has been logged. You can now track your rider
-                  and package details.
-                </AppText>
-
-                <TouchableOpacity
-                  style={[
-                    styles.primarySubmitButton,
-                    {
-                      backgroundColor: theme.text,
-                      marginTop: 24,
-                      width: "100%",
-                    },
-                  ]}
-                  onPress={() => {
-                    setOverviewModalVisible(false);
-                    router.push("/(features)/drivers_menu");
-                  }}
-                >
-                  <AppText
-                    style={[
-                      styles.submitButtonText,
-                      { color: theme.background },
-                    ]}
-                  >
-                    Go to Available Drivers
-                  </AppText>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {submissionStatus === "error" && (
-              <View style={styles.statusWrapper}>
-                <View
-                  style={[
-                    styles.statusIndicatorCircle,
-                    { backgroundColor: "#FF3B3020" },
-                  ]}
-                >
-                  <AppText
-                    style={{
-                      color: "#FF3B30",
-                      fontSize: 32,
-                      fontWeight: "bold",
-                    }}
-                  >
-                    ✕
-                  </AppText>
-                </View>
-                <AppText
-                  style={[styles.statusTitleText, { color: theme.text }]}
-                >
-                  Something Went Wrong
-                </AppText>
-                <AppText
-                  style={[styles.statusBodyText, { color: theme.textMuted }]}
-                >
-                  {error ||
-                    "We couldn't set up your delivery. Please verify form details."}
-                </AppText>
-
-                <TouchableOpacity
-                  style={[
-                    styles.primarySubmitButton,
-                    {
-                      backgroundColor: "#FF3B30",
-                      marginTop: 24,
-                      width: "100%",
-                    },
-                  ]}
-                  onPress={() => {
-                    setOverviewModalVisible(false);
-                    setSubmissionStatus("idle");
-                  }}
-                >
-                  <AppText style={styles.submitButtonText}>
-                    Check Fields and Fix
-                  </AppText>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setOverviewModalVisible(false)}
+        submissionStatus={submissionStatus}
+        loading={loading}
+        itemName={itemName}
+        pickupAddress={pickupAddress}
+        deliveryAddress={deliveryAddress}
+        senderName={senderName}
+        senderContact={senderContact}
+        recipientName={recipientName}
+        recipientContact={recipientContact}
+        isFragile={isFragile}
+        isPerishable={isPerishable}
+        isInsured={isInsured}
+        isImpromptu={isImpromptu}
+        dispatchDate={dispatchDate}
+        error={error as any}
+        createdBooking={createdBooking}
+        onConfirm={handleConfirmSubmit}
+        onGoToDrivers={() => {
+          setOverviewModalVisible(false);
+          if (createdBooking) {
+            router.push({
+              pathname: "/(screens)/one",
+              params: { id: createdBooking._id, type: "parcel" },
+            });
+          }
+        }}
+      />
     </View>
   );
 }
@@ -876,184 +372,59 @@ export default function BookParcelDeliveryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   keyboardContainer: { flex: 1 },
+  headerGradient: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+
+  },
   headerSafeArea: {
-    width: "100%",
-    ...Platform.select({
-      android: {
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 4 : 12,
-      },
-    }),
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    paddingTop: Platform.OS === "ios" ? 4 : 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  backTextButton: { fontSize: 18, fontWeight: "bold" },
-  brandText: { fontSize: 20, letterSpacing: -0.8, fontWeight: "bold" },
-  mainScrollContainer: { flex: 1 },
+  backButton: { padding: 8 },
+  mainScrollView: { flex: 1 },
   scrollContentLayout: {
     paddingTop: 24,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingBottom: Platform.OS === "ios" ? 40 : 24,
   },
-  sectionTitle: {
-    fontSize: 14,
-    letterSpacing: 1.5,
-    marginBottom: 12,
-    fontWeight: "bold",
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 54,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    marginBottom: 14,
-  },
-  clickableInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    height: 54,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    marginBottom: 14,
-  },
-  selectTextLabel: { flex: 1, fontSize: 15 },
-  textInput: { flex: 1, fontSize: 15 },
-  gridContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 14,
-    gap: 12,
-  },
-  flexInputWrapper: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    height: 52,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-  },
-  flexTextInput: { flex: 1, fontSize: 15 },
-  toggleBlockCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-  },
-  toggleTextContent: { flex: 1, paddingRight: 8 },
-  toggleTitle: { fontSize: 16, marginBottom: 2, fontWeight: "bold" },
-  toggleDesc: { fontSize: 14, lineHeight: 14 },
-  divider: { height: 1, width: "100%" },
-  selectableTab: {
-    flex: 1,
-    height: 50,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tabText: { fontSize: 16, fontWeight: "bold" },
-  pickerInlineContainer: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 8,
-    marginBottom: 20,
-    justifyContent: "center",
-  },
-  closePickerBtn: { alignSelf: "flex-end", padding: 8, marginRight: 8 },
   primarySubmitButton: {
     height: 56,
-    borderRadius: 18,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-      },
-      android: { elevation: 3 },
-    }),
+    marginTop: 30,
+    marginBottom: 40,
+
   },
-  submitButtonText: { fontSize: 16, color: "#FFFFFF", fontWeight: "bold" },
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.55)",
   },
   modalDismissArea: { flex: 1 },
-  bottomModalContainer: {
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-    paddingHorizontal: 24,
-    paddingBottom: Platform.OS === "ios" ? 44 : 32,
+  modalContent: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    width: "100%",
   },
   modalKnob: {
     width: 44,
     height: 5,
     borderRadius: 3,
     alignSelf: "center",
-    marginTop: 12,
-    marginBottom: 24,
+    marginVertical: 12,
   },
-  modalTitle: {
-    fontSize: 20,
-    letterSpacing: -0.5,
-    marginBottom: 16,
-    fontWeight: "bold",
-  },
-  modalOverviewBlock: {
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    gap: 12,
-    marginBottom: 20,
-  },
-  summaryItemText: { fontSize: 13, lineHeight: 18 },
-  statusWrapper: { alignItems: "center", paddingVertical: 12 },
-  statusIndicatorCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  cancelModalButton: {
+    height: 52,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
-  },
-  statusTitleText: {
-    fontSize: 18,
-    textAlign: "center",
-    marginBottom: 8,
-    fontWeight: "bold",
-  },
-  statusBodyText: {
-    fontSize: 13,
-    textAlign: "center",
-    paddingHorizontal: 16,
-    lineHeight: 18,
   },
 });

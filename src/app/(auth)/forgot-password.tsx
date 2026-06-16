@@ -69,13 +69,11 @@ export default function ForgotPasswordScreen() {
       });
     } catch (err: any) {
       console.error(
-        `[FORGOT PASSWORD FAILURE] Identity matching directory exception raised: ${
-          err
-        }`
+        `[FORGOT PASSWORD FAILURE] Identity matching directory exception raised: ${err}`
       );
       triggerAlertModal(
         "Request Failed",
-        err  ||
+        err ||
           "Unable to locate an active delivery terminal matching that specific address framework. Please verify entries and retry."
       );
     } finally {
@@ -144,9 +142,10 @@ export default function ForgotPasswordScreen() {
           <Text style={[styles.title, { color: theme.text }]}>
             Reset Password
           </Text>
+
           <Text style={[styles.subtitle, { color: theme.textMuted }]}>
-            Enter your active terminal identifier parameters below to transmit a
-            6-digit secure recovery passkey.
+            Enter the email address you used to create your account. We'll send
+            you a 6-digit code to reset your password.
           </Text>
         </View>
 

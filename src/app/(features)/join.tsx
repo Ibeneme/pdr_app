@@ -72,6 +72,7 @@ export default function JoinRideScreen() {
   const [submissionStatus, setSubmissionStatus] = useState<
     "idle" | "success" | "error"
   >("idle");
+  const [createdRide, setCreatedRide] = useState<any>(null);
 
   const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
     if (Platform.OS !== "ios") setShowDatePicker(false);
@@ -116,7 +117,9 @@ export default function JoinRideScreen() {
     try {
       const resultAction = await dispatch(createJoinRide(joinRidePayload));
 
+      console.warn(resultAction, "resultActionresultAction");
       if (createJoinRide.fulfilled.match(resultAction)) {
+        setCreatedRide(resultAction.payload); // Core payload capture
         setSubmissionStatus("success");
       } else {
         setSubmissionStatus("error");
@@ -582,7 +585,17 @@ export default function JoinRideScreen() {
                   ]}
                   onPress={() => {
                     setOverviewModalVisible(false);
-                    router.push("/(features)/join_ride"); // Adjust navigation as needed
+                    
+                    // Conditionally routing only if payload exists to avoid null reference parameters
+                    if (createdRide) {
+                      router.push({
+                        pathname: "/(screens)/one",
+                        params: {
+                          id: createdRide._id,
+                          type: "joinride", 
+                        },
+                      });
+                    }
                   }}
                 >
                   <AppText
@@ -740,15 +753,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-      },
-      android: { elevation: 3 },
-    }),
+
   },
   submitButtonText: { fontSize: 16, color: "#FFFFFF", fontWeight: "bold" },
   modalOverlay: {

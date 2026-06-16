@@ -1,7 +1,6 @@
 import React from "react";
 import {
   StyleSheet,
-  Text,
   View,
   TouchableOpacity,
   ScrollView,
@@ -9,7 +8,7 @@ import {
   Switch,
   Platform,
   StatusBar,
-  Linking, // 1. Import Linking
+  Linking,
 } from "react-native";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
@@ -21,6 +20,8 @@ import {
   Info,
   ChevronRight,
 } from "lucide-react-native";
+import { AppText } from "@/components/AppText";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 
 export default function SettingsScreen() {
@@ -33,7 +34,6 @@ export default function SettingsScreen() {
     setMode(newMode ? "dark" : "light");
   };
 
-  // 2. Add the URL handler function
   const handleOpenLink = async (url: string) => {
     const supported = await Linking.canOpenURL(url);
     if (supported) {
@@ -47,45 +47,49 @@ export default function SettingsScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          {
-            backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
-          },
-        ]}
+      {/* PREMIUM HEADER GRADIENT */}
+      <LinearGradient
+        colors={isDark ? ["#2A1B4D", theme.surface] : ["#F8F5FF", "#FFFFFF"]}
+        style={styles.headerGradient}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={[
-              styles.iconButton,
-              { backgroundColor: theme.background, borderColor: theme.border },
-            ]}
-            activeOpacity={0.7}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft size={22} color={theme.text} />
-          </TouchableOpacity>
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={24} color={theme.text} />
+            </TouchableOpacity>
 
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
-            Settings
-          </Text>
+            <AppText size={20} weight="bold" color={theme.text}>
+              Settings
+            </AppText>
 
-          <View style={{ width: 44 }} />
-        </View>
-      </SafeAreaView>
+            <View style={{ width: 40 }} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        style={styles.mainScrollView}
+        contentContainerStyle={styles.scrollContentLayout}
         showsVerticalScrollIndicator={false}
       >
-        {/* Account Section */}
-        <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+        {/* ACCOUNT SECTION */}
+        <AppText
+          size={12}
+          weight="bold"
+          color={theme.textMuted}
+          style={{
+            letterSpacing: 1.2,
+            marginBottom: 12,
+            paddingHorizontal: 4,
+            marginTop: 8,
+          }}
+        >
           ACCOUNT
-        </Text>
+        </AppText>
 
         <View
           style={[
@@ -98,23 +102,35 @@ export default function SettingsScreen() {
               <Shield size={22} color={theme.textMuted} />
             </View>
             <View style={styles.settingsTextContainer}>
-              <Text style={[styles.settingsLabel, { color: theme.text }]}>
+              <AppText size={16} weight="medium" color={theme.text}>
                 Privacy & Security
-              </Text>
-              <Text
-                style={[styles.settingsSubtext, { color: theme.textMuted }]}
+              </AppText>
+              <AppText
+                size={13}
+                color={theme.textMuted}
+                style={{ marginTop: 2 }}
               >
                 Manage your data and visibility
-              </Text>
+              </AppText>
             </View>
             <ChevronRight size={20} color={theme.textMuted} />
           </TouchableOpacity>
         </View>
 
-        {/* Preferences Section */}
-        <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+        {/* PREFERENCES SECTION */}
+        <AppText
+          size={12}
+          weight="bold"
+          color={theme.textMuted}
+          style={{
+            letterSpacing: 1.2,
+            marginBottom: 12,
+            paddingHorizontal: 4,
+            marginTop: 24,
+          }}
+        >
           PREFERENCES
-        </Text>
+        </AppText>
 
         <View
           style={[
@@ -131,14 +147,16 @@ export default function SettingsScreen() {
               )}
             </View>
             <View style={styles.settingsTextContainer}>
-              <Text style={[styles.settingsLabel, { color: theme.text }]}>
+              <AppText size={16} weight="medium" color={theme.text}>
                 Dark Mode
-              </Text>
-              <Text
-                style={[styles.settingsSubtext, { color: theme.textMuted }]}
+              </AppText>
+              <AppText
+                size={13}
+                color={theme.textMuted}
+                style={{ marginTop: 2 }}
               >
                 Switch between light and dark themes
-              </Text>
+              </AppText>
             </View>
             <Switch
               value={darkMode}
@@ -149,10 +167,20 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Support & Info */}
-        <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+        {/* SUPPORT & INFO SECTION */}
+        <AppText
+          size={12}
+          weight="bold"
+          color={theme.textMuted}
+          style={{
+            letterSpacing: 1.2,
+            marginBottom: 12,
+            paddingHorizontal: 4,
+            marginTop: 24,
+          }}
+        >
           SUPPORT & INFO
-        </Text>
+        </AppText>
 
         <View
           style={[
@@ -160,7 +188,6 @@ export default function SettingsScreen() {
             { backgroundColor: theme.surface, borderColor: theme.border },
           ]}
         >
-          {/* 3. Updated Help Center Click */}
           <TouchableOpacity
             style={styles.settingsRow}
             activeOpacity={0.7}
@@ -170,16 +197,15 @@ export default function SettingsScreen() {
               <HelpCircle size={22} color={theme.textMuted} />
             </View>
             <View style={styles.settingsTextContainer}>
-              <Text style={[styles.settingsLabel, { color: theme.text }]}>
+              <AppText size={16} weight="medium" color={theme.text}>
                 Help Center
-              </Text>
+              </AppText>
             </View>
             <ChevronRight size={20} color={theme.textMuted} />
           </TouchableOpacity>
 
-          {/* 4. Updated About/Policy Click */}
           <TouchableOpacity
-            style={styles.settingsRow}
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
             activeOpacity={0.7}
             onPress={() => handleOpenLink("https://www.padimanroute.com")}
           >
@@ -187,14 +213,16 @@ export default function SettingsScreen() {
               <Info size={22} color={theme.textMuted} />
             </View>
             <View style={styles.settingsTextContainer}>
-              <Text style={[styles.settingsLabel, { color: theme.text }]}>
+              <AppText size={16} weight="medium" color={theme.text}>
                 About Padiman Route
-              </Text>
-              <Text
-                style={[styles.settingsSubtext, { color: theme.textMuted }]}
+              </AppText>
+              <AppText
+                size={13}
+                color={theme.textMuted}
+                style={{ marginTop: 2 }}
               >
                 v1.2.4 • www.padimanroute.com
-              </Text>
+              </AppText>
             </View>
             <ChevronRight size={20} color={theme.textMuted} />
           </TouchableOpacity>
@@ -206,58 +234,42 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerGradient: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+
+  },
   headerSafeArea: {
-    ...Platform.select({
-      android: {
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 4 : 12,
-      },
-    }),
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  headerTitle: {
-    fontFamily: "RethinkSans-Bold",
-    fontSize: 20,
-    letterSpacing: -0.6,
+  backButton: { padding: 8 },
+
+  mainScrollView: { flex: 1 },
+  scrollContentLayout: {
+    paddingTop: 24,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === "ios" ? 40 : 40,
   },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  scrollView: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 40,
-  },
-  sectionTitle: {
-    fontFamily: "RethinkSans-Bold",
-    fontSize: 12,
-    letterSpacing: 1.5,
-    marginBottom: 12,
-    marginTop: 8,
-  },
+
   settingsCard: {
-    borderRadius: 22,
-    borderWidth: 1,
+    borderRadius: 24,
+    borderWidth: 1.5,
     marginBottom: 28,
     overflow: "hidden",
   },
   settingsRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.06)",
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+  
   },
   iconWrapper: {
     width: 40,
@@ -266,14 +278,5 @@ const styles = StyleSheet.create({
   settingsTextContainer: {
     flex: 1,
     paddingHorizontal: 12,
-  },
-  settingsLabel: {
-    fontFamily: "RethinkSans-Medium",
-    fontSize: 16,
-  },
-  settingsSubtext: {
-    fontFamily: "RethinkSans-Regular",
-    fontSize: 13,
-    marginTop: 2,
   },
 });

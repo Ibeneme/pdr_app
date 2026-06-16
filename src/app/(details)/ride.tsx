@@ -51,7 +51,7 @@ export default function RideDetailsScreen() {
     negotiatorService: any;
   }>();
 
-  console.warn(negotiatorService, 'negotiatorServicenegotiatorService')
+  console.warn(negotiatorService, "negotiatorServicenegotiatorService");
   // Core System States
   const [ride, setRide] = useState<any | null>(null);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
@@ -424,27 +424,6 @@ export default function RideDetailsScreen() {
               </AppText>
             </View>
           </View>
-
-          {displayDriverPhone && !isServiceProvider && (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() =>
-                Linking.openURL(`tel:${displayDriverPhone}`).catch(() => {})
-              }
-              style={[
-                styles.callButton,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Phone size={16} color={colors.primary} />
-              <AppText size={14} weight="bold" color={colors.primary}>
-                Call Operator
-              </AppText>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* CORE ROUTE CONFIGURATION */}

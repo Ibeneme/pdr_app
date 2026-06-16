@@ -1,10 +1,4 @@
-import React, {
-  useEffect,
-  useState,
-  useRef,
-  useCallback,
-  useMemo,
-} from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   View,
@@ -15,7 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   SafeAreaView,
-  Image,
+  Keyboard,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -27,6 +21,7 @@ import { getNegotiationById } from "@/api/slices/negotiation.slice";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/api/store";
 import { MessageBubble } from "@/components/MessageBubble";
+import NegotiationActionPanel from "@/components/NegotiationActionPanel";
 
 interface Message {
   id: string;
@@ -51,7 +46,10 @@ interface Message {
 export default function ChatScreen() {
   const { theme } = useTheme();
   const router = useRouter();
-  const { id: negotiationId } = useLocalSearchParams<{ id: string }>();
+  const { id: negotiationId, parcelId } = useLocalSearchParams<{
+    id: string;
+    parcelId?: string;
+  }>();
 
   const {
     isConnected,
@@ -67,16 +65,33 @@ export default function ChatScreen() {
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
   const [negotiation, setNegotiation] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const dispatch = useDispatch<AppDispatch>();
   const scrollViewRef = useRef<ScrollView>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Dynamic Styles Generator
+  // Keyboard Listeners (Better Android Support)
+  useEffect(() => {
+    const showListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setKeyboardVisible(true)
+    );
+    const hideListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
+
+  // Dynamic Styles
   const dynamicStyles = useMemo(
     () =>
       StyleSheet.create({
@@ -102,38 +117,37 @@ export default function ChatScreen() {
     [theme]
   );
 
+  // Fetch Negotiation
   useEffect(() => {
     if (!negotiationId) return;
-    const fetchDetails = async () => {
+
+    const fetchNegotiation = async () => {
       setIsLoading(true);
       try {
-        const data = await dispatch(getNegotiationById(negotiationId)).unwrap();
-        console.warn(data, 'datadata')
+        const res = await dispatch(getNegotiationById(negotiationId)).unwrap();
+        const data = res?.data ? res.data : res;
         setNegotiation(data);
-      } catch (err) {
-        setError(err as any);
+      } catch (err: any) {
+        setError(err?.message || "Failed to load negotiation");
       } finally {
         setIsLoading(false);
       }
     };
-    fetchDetails();
-  }, [negotiationId]);
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-    return () => clearTimeout(timeout);
-  }, [messages, typingUsers]);
+    fetchNegotiation();
+  }, [negotiationId, dispatch]);
 
+  // Initialize Chat
   useEffect(() => {
     if (!negotiationId) return;
+
     const initializeChat = async () => {
-      setIsLoadingUser(true);
       try {
         const user = await getUser();
         if (!user) return;
+
         setCurrentUser(user);
+
         joinChat(negotiationId, {
           id: user._id || user.id,
           name: user.fullName || user.name || "You",
@@ -141,20 +155,29 @@ export default function ChatScreen() {
           profileImage: user.profileImage,
         });
       } catch (error) {
-        console.error(error);
-      } finally {
-        setIsLoadingUser(false);
+        console.error("Failed to initialize chat:", error);
       }
     };
+
     initializeChat();
+
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       leaveChat();
     };
   }, [negotiationId, joinChat, leaveChat]);
 
+  // Auto Scroll
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 150);
+    return () => clearTimeout(timeout);
+  }, [messages, typingUsers]);
+
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !currentUser || !negotiation) return;
+    if (!messageText.trim() || !currentUser) return;
+
     setIsSending(true);
     try {
       sendMessage(messageText.trim(), currentUser, negotiation);
@@ -177,13 +200,47 @@ export default function ChatScreen() {
     [sendTyping]
   );
 
+  const currentUserIdStr = currentUser?._id || currentUser?.id;
+  const isServiceProvider =
+    negotiation?.serviceProvider?._id === currentUserIdStr ||
+    negotiation?.isProvider === true;
+
   const otherUsers = users.filter(
     (u: any) => u.id !== currentUser?.id && u.id !== currentUser?._id
   );
+
   const chatTitle =
     otherUsers.length > 0
       ? otherUsers.map((u) => u.name || u.fullName).join(", ")
       : "Negotiation Chat";
+
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <ActivityIndicator
+          size="large"
+          color={theme.primary}
+          style={{ flex: 1 }}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <AppText
+          style={{ textAlign: "center", padding: 20, color: theme.text }}
+        >
+          {error}
+        </AppText>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -191,7 +248,8 @@ export default function ChatScreen() {
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 80} // Better for Android
       >
         {/* Header */}
         <View
@@ -216,15 +274,24 @@ export default function ChatScreen() {
           </View>
         </View>
 
+        {/* Negotiation Action Panel */}
+        <NegotiationActionPanel
+          negotiationId={negotiationId!}
+          parcelId={parcelId}
+          isServiceProvider={isServiceProvider}
+          currentUserId={currentUserIdStr}
+          accordion={true}
+        />
+
         {/* Messages */}
         <ScrollView
           ref={scrollViewRef}
           contentContainerStyle={styles.messagesContent}
+          keyboardShouldPersistTaps="handled"
         >
           {messages.map((msg: Message, index: number) => {
             const isMyMessage =
-              (msg.sender?.id || msg.sender?._id) ===
-              (currentUser?.id || currentUser?._id);
+              (msg.sender?.id || msg.sender?._id) === currentUserIdStr;
 
             return (
               <MessageBubble
@@ -266,11 +333,12 @@ export default function ChatScreen() {
             placeholder="Type a message..."
             placeholderTextColor={theme.textMuted}
             multiline
+            maxLength={500}
           />
           <TouchableOpacity
             style={[styles.sendButton, { backgroundColor: theme.primary }]}
             onPress={handleSendMessage}
-            disabled={isSending}
+            disabled={isSending || !messageText.trim()}
           >
             {isSending ? (
               <ActivityIndicator color="#FFF" />
@@ -294,9 +362,7 @@ const styles = StyleSheet.create({
   },
   backButton: { marginRight: 12 },
   headerInfo: { flex: 1 },
-  messagesContainer: { flex: 1 },
-  messagesContent: { padding: 16 },
-  messageText: { fontSize: 16, lineHeight: 22 },
+  messagesContent: { padding: 16, flexGrow: 1 },
   inputContainer: {
     flexDirection: "row",
     padding: 12,
@@ -310,6 +376,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginRight: 10,
     borderWidth: 1,
+    maxHeight: 120,
   },
   sendButton: {
     width: 50,

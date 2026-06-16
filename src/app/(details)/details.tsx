@@ -10,23 +10,17 @@ import {
   Image,
   Platform,
   Alert,
-  TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/api/store";
 import { getRequestById } from "@/api/slices/parcel.request.slice";
-import {
-  createNegotiation,
-  updateNegotiation,
-} from "@/api/slices/negotiation.slice";
+import { createNegotiation } from "@/api/slices/negotiation.slice";
 import { AppText } from "@/components/AppText";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { getUser } from "@/api/secureStore";
-import NegotiationManager from "@/components/NegotiationManager";
-import { NegotiationStatusBanner } from "./NegotiationStatusBanner";
-import { EscrowReleaseButton } from "@/components/EscrowReleaseButton"; // Adjust path if needed
+import NegotiationActionPanel from "@/components/NegotiationActionPanel";
 
 export default function RequestDetailsScreen() {
   const { theme, isDark } = useTheme();
@@ -43,25 +37,6 @@ export default function RequestDetailsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isNegotiating, setIsNegotiating] = useState(false);
-  const [isUpdatingPrice, setIsUpdatingPrice] = useState<
-    Record<string, boolean>
-  >({});
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState<
-    Record<string, boolean>
-  >({});
-  const [priceInputs, setPriceInputs] = useState<Record<string, string>>({});
-  const [showStatusOptions, setShowStatusOptions] = useState<
-    Record<string, boolean>
-  >({});
-
-  const ridedStatuses = [
-    "ride pending",
-    "ride agreed",
-    "ride started",
-    "ride ongoing",
-    "ride completed",
-    "ride cancelled",
-  ];
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -126,136 +101,40 @@ export default function RequestDetailsScreen() {
     }
   };
 
-  const handlePayPress = (negotiation: any) => {
-    if (!negotiation?._id) return;
-    router.push({
-      pathname: "/(details)/PaymentScreen",
-      params: {
-        negotiationId: negotiation._id,
-        serviceType: parcel?.serviceType || "deliver_a_parcel",
-        amount: String(negotiation.agreedAmount),
-        email: currentUser?.email,
-      },
-    });
-  };
-
-  const handleViewChat = (negotiationId: string) => {
-    router.push({
-      pathname: "/(details)/ChatScreen",
-      params: { id: negotiationId, parcelId: id },
-    });
-  };
-
-  const handleViewReceipt = (neg: any) => {
-    if (!neg?._id) return;
-    router.push({
-      pathname: "/(details)/ReceiptScreen",
-      params: {
-        id: id,
-        negotiationId: neg._id,
-        amount: String(neg.agreedAmount || ""),
-        status: neg.status || "",
-        pickupAddress:
-          neg.negotiatorServiceData?.route?.pickupAddress ||
-          parcel?.pickupAddress ||
-          "",
-        destinationCity:
-          neg.negotiatorServiceData?.route?.deliveryAddress ||
-          parcel?.destinationCity ||
-          "",
-        serviceType: parcel?.serviceType || "deliver_a_parcel",
-        payerName: neg.negotiator?.fullName || "",
-        payerEmail: neg.negotiator?.email || "",
-        providerName: neg.serviceProvider?.fullName || "",
-        providerEmail: neg.serviceProvider?.email || "",
-      },
-    });
-  };
-
-  const handleUpdateStatus = async (
-    negotiationId: string,
-    nextStatus: string
-  ) => {
-    setIsUpdatingStatus((prev) => ({ ...prev, [negotiationId]: true }));
-    try {
-      await dispatch(
-        updateNegotiation({
-          id: negotiationId,
-          data: { status: nextStatus },
-        })
-      ).unwrap();
-
-      Alert.alert("Status Updated", `Ride transitioned to: ${nextStatus}`);
-      const updatedRes = await dispatch(getRequestById(id)).unwrap();
-      const nextData = updatedRes?.data ? updatedRes.data : updatedRes;
-      setParcel(nextData);
-      setShowStatusOptions((prev) => ({ ...prev, [negotiationId]: false }));
-    } catch (err: any) {
-      Alert.alert("Error", err || "Failed to update tracking state.");
-    } finally {
-      setIsUpdatingStatus((prev) => ({ ...prev, [negotiationId]: false }));
-    }
-  };
-
-  const handleSetPrice = async (negotiationId: string) => {
-    const priceStr = priceInputs[negotiationId];
-    const price = parseFloat(priceStr);
-
-    if (!price || isNaN(price) || price <= 0) {
-      Alert.alert(
-        "Invalid Price",
-        "Please enter a valid amount greater than 0"
-      );
-      return;
-    }
-
-    setIsUpdatingPrice((prev) => ({ ...prev, [negotiationId]: true }));
-    try {
-      await dispatch(
-        updateNegotiation({
-          id: negotiationId,
-          data: { agreedAmount: price, status: "ride agreed" },
-        })
-      ).unwrap();
-
-      Alert.alert(
-        "Price Set",
-        `Starting price ₦${price.toLocaleString()} has been updated successfully.`
-      );
-      const updatedRes = await dispatch(getRequestById(id)).unwrap();
-      const nextData = updatedRes?.data ? updatedRes.data : updatedRes;
-      setParcel(nextData);
-      setPriceInputs((prev) => ({ ...prev, [negotiationId]: "" }));
-    } catch (err: any) {
-      Alert.alert(
-        "Error",
-        err || "Failed to update target negotiation pricing."
-      );
-    } finally {
-      setIsUpdatingPrice((prev) => ({ ...prev, [negotiationId]: false }));
-    }
-  };
-
   const handleNegotiate = async () => {
     if (!parcel) return;
+
     if (hasExistingNegotiation && activeNegotiation?._id) {
-      handleViewChat(activeNegotiation._id);
+      router.push({
+        pathname: "/(details)/ChatScreen",
+        params: {
+          id: activeNegotiation._id,
+          parcelId: String(id),
+          isServiceProvider: String(isServiceProvider),
+          currentUserId: String(currentUser?._id || currentUser?.id),
+        },
+      });
       return;
     }
+
     const payload = {
       serviceProvider: parcel.user?._id,
       service: id,
       serviceType: "deliver_a_parcel",
       negotiatorService: negotiatorService,
     };
+
     setIsNegotiating(true);
     try {
       const result = await dispatch(createNegotiation(payload)).unwrap();
       if (result?._id) {
-        handleViewChat(result._id);
+        router.push({
+          pathname: "/(details)/ChatScreen",
+          params: { id: result._id },
+        });
       }
     } catch (err: any) {
-      Alert.alert("Error", "Failed to initialize new contract interaction.");
+      Alert.alert("Error", "Failed to initialize negotiation.");
     } finally {
       setIsNegotiating(false);
     }
@@ -352,19 +231,19 @@ export default function RequestDetailsScreen() {
               <AppText size={16} weight="bold" color={theme.text}>
                 {clientName}
               </AppText>
-              <AppText size={12} color={theme.textMuted}>
+              {/* <AppText size={12} color={theme.textMuted}>
                 {parcel.user?.email}
-              </AppText>
-              {parcel.user?.phone && (
+              </AppText> */}
+              {/* {parcel.user?.phone  && (
                 <AppText size={12} color={theme.textMuted}>
                   {parcel.user.phone}
                 </AppText>
-              )}
+              )} */}
             </View>
           </View>
         </View>
 
-        {/* Logistics Address Details */}
+        {/* Logistics Details */}
         <View style={styles.sectionTitleRow}>
           <AppText size={11} weight="bold" color={theme.textMuted}>
             LOGISTICS DETAILS
@@ -373,7 +252,11 @@ export default function RequestDetailsScreen() {
         <View
           style={[
             styles.contentCard,
-            { backgroundColor: theme.surface, borderColor: theme.border },
+            {
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+              padding: 16,
+            },
           ]}
         >
           <View style={styles.timelineRow}>
@@ -409,7 +292,7 @@ export default function RequestDetailsScreen() {
           </View>
         </View>
 
-        {/* Budget Range Context */}
+        {/* Budget Range */}
         <View style={styles.sectionTitleRow}>
           <AppText size={11} weight="bold" color={theme.textMuted}>
             PRICING & BUDGET
@@ -418,7 +301,11 @@ export default function RequestDetailsScreen() {
         <View
           style={[
             styles.contentCard,
-            { backgroundColor: theme.surface, borderColor: theme.border },
+            {
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+              padding: 16,
+            },
           ]}
         >
           <View style={styles.metaParamRow}>
@@ -439,7 +326,7 @@ export default function RequestDetailsScreen() {
           </View>
         </View>
 
-        {/* NEGOTIATIONS COMPLETE MAP OUT */}
+        {/* NEGOTIATIONS */}
         {parcel.negotiations && parcel.negotiations.length > 0 && (
           <>
             <AppText
@@ -450,16 +337,10 @@ export default function RequestDetailsScreen() {
             >
               NEGOTIATIONS ({parcel.negotiations.length})
             </AppText>
+
             {parcel.negotiations.map((neg: any, index: number) => {
-              const agreed = neg.agreedAmount;
-              const isPaid =
-                neg.isPaid === true || neg.status?.toLowerCase() === "paid";
-              const isMyNegotiation =
-                (neg.negotiator?._id || neg.negotiator) === currentUserIdStr;
               const serviceData = neg.negotiatorServiceData;
-              const processingPrice = isUpdatingPrice[neg._id] === true;
-              const processingStatus = isUpdatingStatus[neg._id] === true;
-              const statusOpen = showStatusOptions[neg._id] === true;
+              const agreed = neg.agreedAmount;
 
               return (
                 <View
@@ -472,412 +353,21 @@ export default function RequestDetailsScreen() {
                     },
                   ]}
                 >
-                  <NegotiationStatusBanner
-                    status={neg.status}
-                    isPaid={neg.isPaid}
+                  <NegotiationActionPanel
+                    negotiationId={neg._id}
+                    parcelId={id as string}
                     isServiceProvider={isServiceProvider}
-                    theme={theme}
-                    showDropdown={showStatusOptions[neg._id]}
-                    isUpdatingStatus={isUpdatingStatus[neg._id]}
-                    onUpdatePress={() =>
-                      setShowStatusOptions((prev) => ({
-                        ...prev,
-                        [neg._id]: !prev[neg._id],
-                      }))
-                    }
-                    onDropdownOptionSelect={(nextStatus) =>
-                      handleUpdateStatus(neg._id, nextStatus)
-                    }
+                    currentUserId={currentUserIdStr}
+                    accordion={false} // Set true if you want accordion modal behavior
                   />
-                  {isPaid && neg?.isConfirmed === false && (
-                    <EscrowReleaseButton
-                      negotiationId={neg._id}
-                      theme={theme}
-                      isServiceProvider={isServiceProvider}
-                      onSuccess={refreshParcel}
-                    />
-                  )}
-
-                  {/* Paid & Receipt Banners */}
-                  {isPaid && (
-                    <View style={styles.receiptBannerContainer}>
-                      <View style={styles.receiptBannerLeft}>
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={18}
-                          color="#10B981"
-                        />
-                        <AppText size={13} weight="bold" color="#10B981">
-                          Payment Confirmed
-                        </AppText>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.receiptActionBtn}
-                        onPress={() => handleViewReceipt(neg)}
-                      >
-                        <Ionicons
-                          name="receipt-outline"
-                          size={14}
-                          color="#10B981"
-                        />
-                        <AppText size={12} weight="bold" color="#10B981">
-                          View Receipt
-                        </AppText>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  {/* Operational Ride Track Control Banner */}
-                  {isPaid && isServiceProvider && (
-                    <View
-                      style={[
-                        styles.rideStatusBanner,
-                        {
-                          backgroundColor: theme.background,
-                          borderColor: theme.border,
-                        },
-                      ]}
-                    >
-                      <View style={styles.statusBannerHeader}>
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          <MaterialCommunityIcons
-                            name="car-connected"
-                            size={18}
-                            color={theme.primary}
-                          />
-                          <View>
-                            <AppText size={11} color={theme.textMuted}>
-                              TRACKING STATUS
-                            </AppText>
-                            <AppText
-                              size={13}
-                              weight="bold"
-                              color={theme.text}
-                              style={{ textTransform: "capitalize" }}
-                            >
-                              {neg.status || "ride pending"}
-                            </AppText>
-                          </View>
-                        </View>
-                        <TouchableOpacity
-                          style={[
-                            styles.updateTriggerBtn,
-                            { backgroundColor: theme.primary },
-                          ]}
-                          onPress={() =>
-                            setShowStatusOptions((prev) => ({
-                              ...prev,
-                              [neg._id]: !prev[neg._id],
-                            }))
-                          }
-                        >
-                          <AppText size={12} weight="bold" color="#FFF">
-                            Update
-                          </AppText>
-                          <Ionicons
-                            name={statusOpen ? "chevron-up" : "chevron-down"}
-                            size={14}
-                            color="#FFF"
-                          />
-                        </TouchableOpacity>
-                      </View>
-
-                      {statusOpen && (
-                        <View
-                          style={[
-                            styles.statusDropdown,
-                            { borderTopColor: theme.border },
-                          ]}
-                        >
-                          {processingStatus ? (
-                            <ActivityIndicator
-                              size="small"
-                              color={theme.primary}
-                              style={{ marginVertical: 10 }}
-                            />
-                          ) : (
-                            ridedStatuses.map((st) => (
-                              <TouchableOpacity
-                                key={st}
-                                style={[
-                                  styles.statusOptionRow,
-                                  neg.status === st && {
-                                    backgroundColor: theme.surface,
-                                  },
-                                ]}
-                                onPress={() => handleUpdateStatus(neg._id, st)}
-                              >
-                                <AppText
-                                  size={13}
-                                  color={
-                                    neg.status === st
-                                      ? theme.primary
-                                      : theme.text
-                                  }
-                                  weight={
-                                    neg.status === st ? "bold" : "regular"
-                                  }
-                                >
-                                  {st}
-                                </AppText>
-                                {neg.status === st && (
-                                  <Ionicons
-                                    name="checkmark"
-                                    size={16}
-                                    color={theme.primary}
-                                  />
-                                )}
-                              </TouchableOpacity>
-                            ))
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  )}
-
-                  {/* Negotiator Profile Info Header */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginTop: 4,
-                    }}
-                  >
-                    <View>
-                      <AppText size={15} weight="bold" color={theme.text}>
-                        {neg.negotiator?.fullName || "Negotiator"}
-                      </AppText>
-                      {neg.negotiator?.email && (
-                        <AppText size={12} color={theme.textMuted}>
-                          {neg.negotiator.email}
-                        </AppText>
-                      )}
-                    </View>
-                    {agreed && (
-                      <AppText size={16} weight="bold" color={theme.primary}>
-                        ₦{Number(agreed).toLocaleString()}
-                      </AppText>
-                    )}
-                  </View>
-
-                  {/* Dynamic negotiatorServiceData Mapping Structure */}
-                  {serviceData && (
-                    <View
-                      style={{
-                        marginTop: 14,
-                        padding: 12,
-                        backgroundColor: theme.background,
-                        borderRadius: 12,
-                        gap: 12,
-                      }}
-                    >
-                      <AppText size={13} weight="bold" color={theme.primary}>
-                        Parcel Info & Bookings
-                      </AppText>
-
-                      {/* Item details */}
-                      {serviceData.item && (
-                        <View style={styles.subDataBlock}>
-                          <View style={styles.iconHeadingRow}>
-                            <MaterialCommunityIcons
-                              name="package-variant-closed"
-                              size={16}
-                              color={theme.text}
-                            />
-                            <AppText size={12} weight="bold" color={theme.text}>
-                              Item Information
-                            </AppText>
-                          </View>
-                          <AppText
-                            size={13}
-                            color={theme.text}
-                            style={{ paddingLeft: 4 }}
-                          >
-                            Item Name:{" "}
-                            <AppText weight="bold" color={theme.text}>
-                              {serviceData.item.name || "N/A"}
-                            </AppText>
-                          </AppText>
-                        </View>
-                      )}
-
-                      {/* Route Specs / Locations */}
-                      {serviceData.route && (
-                        <View style={styles.subDataBlock}>
-                          <View style={styles.iconHeadingRow}>
-                            <Ionicons
-                              name="location-outline"
-                              size={16}
-                              color={theme.text}
-                            />
-                            <AppText size={12} weight="bold" color={theme.text}>
-                              Locations
-                            </AppText>
-                          </View>
-                          <AppText
-                            size={13}
-                            color={theme.text}
-                            style={{ paddingLeft: 4 }}
-                          >
-                            Pickup:{" "}
-                            <AppText weight="bold" color={theme.text}>
-                              {serviceData.route.pickupAddress || "N/A"}
-                            </AppText>
-                          </AppText>
-                          <AppText
-                            size={13}
-                            color={theme.text}
-                            style={{ paddingLeft: 4 }}
-                          >
-                            Delivery:{" "}
-                            <AppText weight="bold" color={theme.text}>
-                              {serviceData.route.deliveryAddress || "N/A"}
-                            </AppText>
-                          </AppText>
-                        </View>
-                      )}
-
-                      {/* Contact Parties (Sender & Receiver) */}
-                      {serviceData.parties && (
-                        <View style={styles.subDataBlock}>
-                          <View style={styles.iconHeadingRow}>
-                            <Ionicons
-                              name="people-outline"
-                              size={16}
-                              color={theme.text}
-                            />
-                            <AppText size={12} weight="bold" color={theme.text}>
-                              Parties Involved
-                            </AppText>
-                          </View>
-                          {serviceData.parties.sender && (
-                            <View style={{ paddingLeft: 4, marginTop: 2 }}>
-                              <AppText size={13} color={theme.text}>
-                                Sender:{" "}
-                                <AppText weight="bold" color={theme.text}>
-                                  {serviceData.parties.sender.fullName}
-                                </AppText>{" "}
-                                ({serviceData.parties.sender.contact})
-                              </AppText>
-                            </View>
-                          )}
-                          {serviceData.parties.recipient && (
-                            <View style={{ paddingLeft: 4, marginTop: 2 }}>
-                              <AppText size={13} color={theme.text}>
-                                Receiver:{" "}
-                                <AppText weight="bold" color={theme.text}>
-                                  {serviceData.parties.recipient.fullName}
-                                </AppText>{" "}
-                                ({serviceData.parties.recipient.contact})
-                              </AppText>
-                            </View>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  )}
-
-                  {/* Pricing Actions Form Interface */}
-                  {isServiceProvider && !isPaid && (
-                    <View style={{ marginTop: 12 }}>
-                      <AppText size={12} color={theme.textMuted}>
-                        Set Starting Price
-                      </AppText>
-                      <View
-                        style={{ flexDirection: "row", gap: 8, marginTop: 6 }}
-                      >
-                        <TextInput
-                          style={{
-                            flex: 1,
-                            borderWidth: 1,
-                            borderColor: theme.border,
-                            borderRadius: 10,
-                            padding: 10,
-                            color: theme.text,
-                            backgroundColor: theme.background,
-                          }}
-                          placeholder="Enter amount (₦)"
-                          keyboardType="numeric"
-                          value={priceInputs[neg._id] || ""}
-                          editable={!processingPrice}
-                          onChangeText={(text) =>
-                            setPriceInputs((prev) => ({
-                              ...prev,
-                              [neg._id]: text,
-                            }))
-                          }
-                        />
-                        <TouchableOpacity
-                          style={{
-                            backgroundColor: theme.primary,
-                            paddingHorizontal: 20,
-                            justifyContent: "center",
-                            borderRadius: 10,
-                          }}
-                          onPress={() => handleSetPrice(neg._id)}
-                          disabled={processingPrice}
-                        >
-                          {processingPrice ? (
-                            <ActivityIndicator color="#FFF" size="small" />
-                          ) : (
-                            <AppText size={14} weight="bold" color="#FFF">
-                              Set
-                            </AppText>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-
-                  {isServiceProvider && (
-                    <TouchableOpacity
-                      style={[
-                        styles.primaryActionBtn,
-                        { backgroundColor: theme.primary, marginTop: 12 },
-                      ]}
-                      onPress={() => handleViewChat(neg._id)}
-                    >
-                      <AppText size={15} weight="bold" color="#FFF">
-                        Open Chat
-                      </AppText>
-                    </TouchableOpacity>
-                  )}
-
-                  {agreed &&
-                    !isPaid &&
-                    !isServiceProvider &&
-                    isMyNegotiation && (
-                      <TouchableOpacity
-                        style={[
-                          styles.primaryActionBtn,
-                          { backgroundColor: "#10B981", marginTop: 8 },
-                        ]}
-                        onPress={() => handlePayPress(neg)}
-                      >
-                        <AppText size={15} weight="bold" color="#FFF">
-                          Pay Now - ₦{Number(agreed).toLocaleString()}
-                        </AppText>
-                      </TouchableOpacity>
-                    )}
                 </View>
               );
             })}
           </>
         )}
-
-        {isServiceProvider && (
-          <NegotiationManager negotiationId={activeNegotiation?._id} />
-        )}
       </ScrollView>
 
-      {/* Bottom Floating Menu Anchor */}
+      {/* Bottom Floating Button */}
       {!isOwner && (
         <View
           style={[
@@ -939,7 +429,7 @@ const styles = StyleSheet.create({
   contentCard: {
     borderRadius: 20,
     borderWidth: 1,
-    padding: 16,
+
     marginBottom: 20,
   },
   profileSection: { flexDirection: "row", alignItems: "center", gap: 14 },
@@ -981,69 +471,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   subDataBlock: { gap: 1, marginTop: 4 },
   iconHeadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     marginBottom: 2,
-  },
-
-  // Paid Receipt Banner Component Styles
-  receiptBannerContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#ECFDF5",
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#A7F3D0",
-    marginBottom: 12,
-  },
-  receiptBannerLeft: { flexDirection: "row", alignItems: "center", gap: 6 },
-  receiptActionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#FFF",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#10B981",
-  },
-
-  // Track Status Controller Dropdown Styles
-  rideStatusBanner: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  statusBannerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  updateTriggerBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  statusDropdown: { marginTop: 10, paddingTop: 6, borderTopWidth: 1 },
-  statusOptionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    marginVertical: 1,
   },
 });

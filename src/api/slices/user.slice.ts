@@ -22,6 +22,18 @@ export interface UserProfile {
     isDriver?: boolean;
 }
 
+// App Update Interface
+export interface AppUpdateInfo {
+    currentVersion: string;
+    latestVersion: string;
+    isUpdateAvailable: boolean;
+    forceUpdate: boolean;
+    updateTitle: string;
+    updateDescription: string;
+    releaseDate: string;
+    downloadLink: string;
+}
+
 // Dashboard Interfaces
 export interface DashboardMetrics {
     totalOngoingCount: number;
@@ -52,6 +64,7 @@ interface UserState {
         metrics: DashboardMetrics | null;
         orders: DashboardOrders | null;
     };
+    appUpdate: AppUpdateInfo | null;
     isLoading: boolean;
     error: string | null;
 }
@@ -59,18 +72,17 @@ interface UserState {
 const initialState: UserState = {
     profile: null,
     dashboardData: { metrics: null, orders: null },
+    appUpdate: null,
     isLoading: false,
     error: null,
 };
 
 // --- Async Thunks ---
-
 export const savePushToken = createAsyncThunk<void, { expoPushToken: string }, { rejectValue: string }>(
     "user/savePushToken",
     async (payload, { rejectWithValue }) => {
         try {
             await axiosInstance.post("/padiman_route/user/push-token", payload);
-            console.log("[USER SLICE] Push token saved successfully");
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.message || "Failed to save push token");
         }
@@ -83,7 +95,6 @@ export const getProfile = createAsyncThunk<UserProfile, void, { rejectValue: str
         try {
             const response = await axiosInstance.get("/padiman_route/user/profile");
             const userData = response.data;
-
             if (userData && userData._id) {
                 await saveUser(userData);
             }
@@ -106,25 +117,16 @@ export const updateProfile = createAsyncThunk<UserProfile, Partial<UserProfile>,
     }
 );
 
-// 🔥 NEW: Upload Profile Picture
-export const updateProfilePicture = createAsyncThunk<
-    string,
-    FormData,
-    { rejectValue: string }
->(
+export const updateProfilePicture = createAsyncThunk<string, FormData, { rejectValue: string }>(
     "user/updateProfilePicture",
     async (formData, { rejectWithValue }) => {
         try {
             const response = await axiosInstance.put(
                 "/padiman_route/user/profile-picture",
                 formData,
-                {
-                    headers: {
-                        "Content-Type": "multipart/form-data",
-                    },
-                }
+                { headers: { "Content-Type": "multipart/form-data" } }
             );
-            return response.data.profileImage; // Return new image URL
+            return response.data.profileImage;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.message || "Failed to upload profile picture");
         }
@@ -154,6 +156,19 @@ export const fetchDashboardOrders = createAsyncThunk<DashboardPayload, void, { r
     }
 );
 
+// 🔥 NEW: App Updates Thunk
+export const getAppUpdates = createAsyncThunk<AppUpdateInfo, void, { rejectValue: string }>(
+    "user/getAppUpdates",
+    async (_, { rejectWithValue }) => {
+        try {
+            const response = await axiosInstance.get("/padiman_route/user/app-updates");
+            return response.data.data;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.message || "Failed to fetch app updates");
+        }
+    }
+);
+
 // --- Slice ---
 const userSlice = createSlice({
     name: "user",
@@ -162,6 +177,7 @@ const userSlice = createSlice({
         clearUser: (state) => {
             state.profile = null;
             state.dashboardData = { metrics: null, orders: null };
+            state.appUpdate = null;
             state.error = null;
         },
     },
@@ -171,42 +187,40 @@ const userSlice = createSlice({
             .addCase(getProfile.fulfilled, (state, action: PayloadAction<UserProfile>) => {
                 state.profile = action.payload;
             })
-
-            // Update Text Profile
+            // Update Profile
             .addCase(updateProfile.fulfilled, (state, action: PayloadAction<UserProfile>) => {
                 if (state.profile) {
                     state.profile = { ...state.profile, ...action.payload };
                 }
             })
-
-            // 🔥 Update Profile Picture
+            // Update Profile Picture
             .addCase(updateProfilePicture.fulfilled, (state, action: PayloadAction<string>) => {
                 if (state.profile) {
                     state.profile.profileImage = action.payload;
                 }
             })
-
             // Delete Account
             .addCase(deleteAccount.fulfilled, (state) => {
                 state.profile = null;
                 state.dashboardData = { metrics: null, orders: null };
+                state.appUpdate = null;
             })
-
             // Dashboard
             .addCase(fetchDashboardOrders.fulfilled, (state, action: PayloadAction<DashboardPayload>) => {
                 state.dashboardData.metrics = action.payload.metrics;
                 state.dashboardData.orders = action.payload.orders;
             })
-
-            // Save Push Token
-            .addCase(savePushToken.fulfilled, (state) => {
-                // No state change needed
+            // 🔥 App Updates
+            .addCase(getAppUpdates.fulfilled, (state, action: PayloadAction<AppUpdateInfo>) => {
+                state.appUpdate = action.payload;
             })
-
+            // Save Push Token
+            .addCase(savePushToken.fulfilled, () => { })
             // Logout
             .addCase(logout, (state) => {
                 state.profile = null;
                 state.dashboardData = { metrics: null, orders: null };
+                state.appUpdate = null;
                 state.error = null;
             })
 

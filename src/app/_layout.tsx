@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, View, Platform } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 // Provider & Data Layer Imports
@@ -11,6 +11,8 @@ import { store } from "@/api/store";
 import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
 import { getAuthToken } from "@/api/secureStore";
 import { SocketProvider } from "@/contexts/socket";
+import { NetworkMonitor } from "@/components/NetworkMonitor";
+import { AppUpdateModal } from "@/components/AppUpdateModal";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -40,6 +42,8 @@ export default function RootLayout() {
       <ThemeProvider>
         <SocketProvider>
           <SafeAreaProvider>
+            <AppUpdateModal />
+            <NetworkMonitor />
             <RootLayoutInitializer />
           </SafeAreaProvider>
         </SocketProvider>
@@ -93,6 +97,7 @@ function RootLayoutInitializer() {
     console.log("⏳ Showing loading screen (authentication check in progress)");
     return (
       <SafeAreaView
+        edges={["top", "bottom"]}
         style={{
           flex: 1,
           justifyContent: "center",
@@ -107,23 +112,41 @@ function RootLayoutInitializer() {
 
   console.log("✅ Initialization complete. Rendering main navigation stack");
 
-  // Main Navigation Stack
+  // Main Navigation Stack Wrapper
+  if (Platform.OS === "android") {
+    return (
+      <SafeAreaView
+        edges={["top", "bottom"]}
+        style={{ flex: 1, backgroundColor: theme.background }}
+      >
+        <NavigationStack />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)/Onboarding" />
-        <Stack.Screen name="(auth)/sign-in" />
-        <Stack.Screen name="(auth)/otp" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="(screens)/notifications" />
-        <Stack.Screen name="(screens)/order" />
-        <Stack.Screen name="(screens)/profile" />
-        <Stack.Screen name="(screens)/settings" />
-        <Stack.Screen name="(screens)/support" />
-        <Stack.Screen name="(screens)/wallet" />
-        <Stack.Screen name="(screens)/withdrawal" />
-      </Stack>
+      <NavigationStack />
     </View>
+  );
+}
+
+// Reusable Clean navigation layer to prevent duplicate JSX code
+function NavigationStack() {
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(auth)/Onboarding" />
+      <Stack.Screen name="(auth)/sign-in" />
+      <Stack.Screen name="(auth)/otp" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(screens)/notifications" />
+      <Stack.Screen name="(screens)/order" />
+      <Stack.Screen name="(screens)/profile" />
+      <Stack.Screen name="(screens)/settings" />
+      <Stack.Screen name="(screens)/support" />
+      <Stack.Screen name="(screens)/wallet" />
+      <Stack.Screen name="(screens)/withdrawal" />
+    </Stack>
   );
 }

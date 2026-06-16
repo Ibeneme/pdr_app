@@ -8,13 +8,22 @@ import {
   Platform,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { AppText } from "@/components/AppText";
-import { Bell, LayoutDashboard } from "lucide-react-native";
+import {
+  Bell,
+  LayoutDashboard,
+  ArrowUpRight,
+  PackageCheck,
+  Truck,
+  UserPlus,
+  Gauge,
+} from "lucide-react-native";
 import SidebarDrawer from "@/components/SidebarDrawer";
-import Constants from "expo-constants";
+import { LinearGradient } from "expo-linear-gradient";
 
 // Redux
 import { useDispatch, useSelector } from "react-redux";
@@ -36,46 +45,32 @@ export default function HomeScreen() {
   } = useSelector((state: RootState) => state.user);
 
   // Notification Selector
-  const {
-    unreadCount,
-    isLoading: isNotifLoading,
-    error: notifError,
-  } = useSelector((state: RootState) => state.notification);
+  const { unreadCount, isLoading: isNotifLoading } = useSelector(
+    (state: RootState) => state.notification
+  );
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Fallbacks & Dynamic Analytics Calculation
-  // const ongoingOrdersCount = profile?.ongoingOrders?.length || 0;
-  // const estimatedArrival = profile?.estimatedArrival || "~30 mins";
 
   // Fetch profiles, notifications, and register push token safely
   useEffect(() => {
     const initializeUser = async () => {
       try {
-        // 1. Core Profile Sync
         await dispatch(getProfile()).unwrap();
-
-        // 2. Notifications Pull
         await dispatch(fetchNotifications()).unwrap();
 
-        // 3. Resolve Project Identifier from app manifest config dynamically
-        const projectId =
-          Constants.expoConfig?.extra?.eas?.projectId ||
-          Constants.manifest2?.extra?.eas?.projectId;
-
-        if (!projectId) {
-          console.warn(
-            "⚠️ [PUSH NOTIFICATION] Missing projectId configuration in your app manifest mapping."
+        try {
+          const token = await Notifications.getExpoPushTokenAsync();
+          if (token?.data) {
+            console.log("Expo Push Token found:", token.data);
+            await dispatch(
+              savePushToken({ expoPushToken: token.data })
+            ).unwrap();
+          }
+        } catch (pushErr: any) {
+          console.log(
+            "Expo Push Token registration failed or skipped:",
+            pushErr.message
           );
-          return;
-        }
-
-        // 4. Secure Push registration pipeline
-        const token = await Notifications.getExpoPushTokenAsync({ projectId });
-
-        if (token?.data) {
-          console.log("Expo Push Token:", token.data);
-          await dispatch(savePushToken({ expoPushToken: token.data })).unwrap();
         }
       } catch (err: any) {
         console.error("Failed to initialize system parameters:", err);
@@ -145,77 +140,75 @@ export default function HomeScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* --- HEADER --- */}
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          {
-            backgroundColor: colors.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-          },
-        ]}
+      {/* PREMIUM HEADER GRADIENT */}
+      <LinearGradient
+        colors={isDark ? [colors.surface, colors.surface] : ["#F8F5FF", "#FFFFFF"]}
+        style={styles.headerGradient}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => setSidebarOpen(true)}
-            style={[
-              styles.backTextButton,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-              },
-            ]}
-            activeOpacity={0.7}
-          >
-            <LayoutDashboard color={colors.text} size={22} />
-          </TouchableOpacity>
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={() => setSidebarOpen(true)}
+              style={[
+                styles.iconNavButton,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.04)",
+                  borderColor: "transparent",
+                },
+              ]}
+              activeOpacity={0.7}
+            >
+              <LayoutDashboard color={colors.text} size={22} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => {
-              router.push("/(screens)/notifications");
-            }}
-            style={[
-              styles.backTextButton,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-              },
-            ]}
-            activeOpacity={0.7}
-          >
-            <Bell color={colors.text} size={22} />
-            {unreadCount > 0 && (
-              <View
-                style={[styles.notiBadge, { backgroundColor: colors.primary }]}
-              >
-                <AppText size={9} weight="bold" color="#FFF">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </AppText>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+            <TouchableOpacity
+              onPress={() => router.push("/(screens)/notifications")}
+              style={[
+                styles.iconNavButton,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.04)",
+                  borderColor: "transparent",
+                },
+              ]}
+              activeOpacity={0.7}
+            >
+              <Bell color={colors.text} size={22} />
+              {unreadCount > 0 && (
+                <View
+                  style={[
+                    styles.notiBadge,
+                    { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <AppText size={9} weight="bold" color="#FFF">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </AppText>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
-      {/* System State Handlers */}
+      {/* System Synchronization Status */}
       {(isUserLoading || isNotifLoading) && (
-        <View style={styles.infoMessageWrapper}>
-          <AppText size={13} color={colors.textMuted}>
-            Updating synchronization status...
+        <View style={styles.syncIndicator}>
+          <ActivityIndicator
+            size="small"
+            color={colors.primary}
+            style={{ marginRight: 6 }}
+          />
+          <AppText size={12} color={colors.textMuted} weight="medium">
+            Syncing platform matrix...
           </AppText>
         </View>
       )}
 
-      {/* {(userError || notifError) && (
-        <View style={styles.infoMessageWrapper}>
-          <AppText size={13} color="red">
-            Error handling system synchronization context.
-          </AppText>
-        </View>
-      )} */}
-
-      {/* --- MAIN CONTENT --- */}
+      {/* MAIN CONTENT HERO & PANELS */}
       <ScrollView
         style={styles.mainScrollContainer}
         contentContainerStyle={styles.scrollContentLayout}
@@ -223,56 +216,35 @@ export default function HomeScreen() {
       >
         <View style={styles.welcomeBanner}>
           {profile?.fullName && (
-            <AppText size={18} color={colors.text} style={{ marginTop: 8 }}>
-              Welcome back, {profile.fullName.split(" ")[0]}!
+            <AppText
+              size={15}
+              color={colors.primary}
+              weight="bold"
+              style={styles.greetingText}
+            >
+              WELCOME BACK, {profile.fullName.split(" ")[0].toUpperCase()}
             </AppText>
           )}
 
           <AppText
-            size={26}
+            size={28}
             weight="bold"
             color={colors.text}
-            style={{ letterSpacing: -0.6 }}
+            style={{ letterSpacing: -0.8, lineHeight: 34 }}
           >
             Where are we routing today?
           </AppText>
         </View>
 
-        {/* --- DYNAMIC DASHBOARD ANALYTICS FRAME --- */}
-        {/* <TouchableOpacity
-          style={[
-            styles.dashboardCardFrame,
-            { backgroundColor: colors.primary, borderColor: colors.primary },
-          ]}
-          onPress={() => router.push("/(screens)/order")}
-          activeOpacity={0.9}
+        {/* FEATURE SECTIONS GRID LAYOUT */}
+        <AppText
+          size={13}
+          weight="bold"
+          color={colors.textMuted}
+          style={styles.sectionLabel}
         >
-          <View style={styles.dashboardCardLeft}>
-            <View style={styles.textBadgeOverlay}>
-              <AppText size={10} weight="bold" color="#FFF">
-                {ongoingOrdersCount > 0 ? "ACTIVE" : "STABLE"}
-              </AppText>
-            </View>
-            <View style={styles.dashboardTextContainer}>
-              <AppText size={15} weight="bold" color="#FFF">
-                {ongoingOrdersCount} ONGOING{" "}
-                {ongoingOrdersCount === 1 ? "ORDER" : "ORDERS"}
-              </AppText>
-              <AppText
-                size={14}
-                color="rgba(255,255,255,0.8)"
-                style={{ marginTop: 2 }}
-              >
-                {ongoingOrdersCount > 0
-                  ? `Estimated runtime arrival: ${estimatedArrival}`
-                  : "No operational freight items currently routing."}
-              </AppText>
-            </View>
-          </View>
-          <AppText size={11} weight="bold" color="#FFF">
-            VIEW
-          </AppText>
-        </TouchableOpacity> */}
+          PARCEL FREIGHT & LOGISTICS
+        </AppText>
 
         <View style={styles.gridContainer}>
           <TouchableOpacity
@@ -284,21 +256,20 @@ export default function HomeScreen() {
             activeOpacity={0.85}
           >
             <View style={styles.cardInternalWrapper}>
-              <View
-                style={[
-                  styles.inlineStaticLabelBadge,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <AppText size={9} weight="bold" color={colors.primary}>
-                  RECEIVE
-                </AppText>
+              <View style={styles.cardActionHeaderRow}>
+                <View
+                  style={[
+                    styles.iconIndicatorBox,
+                    { backgroundColor: `${colors.primary}15` },
+                  ]}
+                >
+                  <PackageCheck size={20} color={colors.primary} />
+                </View>
+                <ArrowUpRight size={16} color={colors.textMuted} />
               </View>
+
               <AppText
-                size={17}
+                size={16}
                 weight="bold"
                 color={colors.text}
                 style={styles.cardTitle}
@@ -306,11 +277,11 @@ export default function HomeScreen() {
                 Send a Delivery
               </AppText>
               <AppText
-                size={14}
+                size={12}
                 color={colors.textMuted}
                 style={styles.cardDesc}
               >
-                Accept incoming parcels ready for rapid hub dispatch.
+                Book a freight dispatch across regional node hubs safely.
               </AppText>
             </View>
           </TouchableOpacity>
@@ -324,21 +295,20 @@ export default function HomeScreen() {
             activeOpacity={0.85}
           >
             <View style={styles.cardInternalWrapper}>
-              <View
-                style={[
-                  styles.inlineStaticLabelBadge,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <AppText size={9} weight="bold" color={colors.primary}>
-                  DISPATCH
-                </AppText>
+              <View style={styles.cardActionHeaderRow}>
+                <View
+                  style={[
+                    styles.iconIndicatorBox,
+                    { backgroundColor: "rgba(34, 197, 94, 0.12)" },
+                  ]}
+                >
+                  <Truck size={20} color="#22C55E" />
+                </View>
+                <ArrowUpRight size={16} color={colors.textMuted} />
               </View>
+
               <AppText
-                size={17}
+                size={16}
                 weight="bold"
                 color={colors.text}
                 style={styles.cardTitle}
@@ -346,41 +316,49 @@ export default function HomeScreen() {
                 Deliver a Delivery
               </AppText>
               <AppText
-                size={14}
+                size={12}
                 color={colors.textMuted}
                 style={styles.cardDesc}
               >
-                Secure a dynamic courier node to transport items instantly.
+                Secure commercial items to deliver on your route instantly.
               </AppText>
             </View>
           </TouchableOpacity>
         </View>
+
+        <AppText
+          size={13}
+          weight="bold"
+          color={colors.textMuted}
+          style={styles.sectionLabel}
+        >
+          COMMUTE & RIDE SHARING
+        </AppText>
 
         <View style={styles.gridContainer}>
           <TouchableOpacity
             style={[
               styles.gridCard,
               { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
+            ]} 
             onPress={() => handleAction("JOIN_RIDE")}
             activeOpacity={0.85}
           >
             <View style={styles.cardInternalWrapper}>
-              <View
-                style={[
-                  styles.inlineStaticLabelBadge,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <AppText size={9} weight="bold" color={colors.primary}>
-                  JOIN
-                </AppText>
+              <View style={styles.cardActionHeaderRow}>
+                <View
+                  style={[
+                    styles.iconIndicatorBox,
+                    { backgroundColor: "rgba(59, 130, 246, 0.12)" },
+                  ]}
+                >
+                  <UserPlus size={20} color="#3B82F6" />
+                </View>
+                <ArrowUpRight size={16} color={colors.textMuted} />
               </View>
+
               <AppText
-                size={17}
+                size={16}
                 weight="bold"
                 color={colors.text}
                 style={styles.cardTitle}
@@ -388,11 +366,11 @@ export default function HomeScreen() {
                 Join a Ride
               </AppText>
               <AppText
-                size={14}
+                size={12}
                 color={colors.textMuted}
                 style={styles.cardDesc}
               >
-                Book empty seats along matching line routes.
+                Find empty commuter seats along matching destination paths.
               </AppText>
             </View>
           </TouchableOpacity>
@@ -406,21 +384,20 @@ export default function HomeScreen() {
             activeOpacity={0.85}
           >
             <View style={styles.cardInternalWrapper}>
-              <View
-                style={[
-                  styles.inlineStaticLabelBadge,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <AppText size={9} weight="bold" color={colors.primary}>
-                  OFFER
-                </AppText>
+              <View style={styles.cardActionHeaderRow}>
+                <View
+                  style={[
+                    styles.iconIndicatorBox,
+                    { backgroundColor: "rgba(168, 85, 247, 0.12)" },
+                  ]}
+                >
+                  <Gauge size={20} color="#A855F7" />
+                </View>
+                <ArrowUpRight size={16} color={colors.textMuted} />
               </View>
+
               <AppText
-                size={17}
+                size={16}
                 weight="bold"
                 color={colors.text}
                 style={styles.cardTitle}
@@ -428,11 +405,11 @@ export default function HomeScreen() {
                 Offer a Ride
               </AppText>
               <AppText
-                size={14}
+                size={12}
                 color={colors.textMuted}
                 style={styles.cardDesc}
               >
-                Publish upcoming vehicular tracks to distribute fuel metrics.
+                Publish trip tracking pipelines to distribute travel overhead.
               </AppText>
             </View>
           </TouchableOpacity>
@@ -450,35 +427,33 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerGradient: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
   headerSafeArea: {
-    width: "100%",
-    ...Platform.select({
-      android: {
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 4 : 12,
-      },
-    }),
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingBottom: 14,
-    paddingTop: Platform.OS === "ios" ? 4 : 8,
+    paddingBottom: 16,
+    paddingTop: 8,
   },
-  backTextButton: {
+  iconNavButton: {
     height: 44,
-    borderRadius: 12,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
     width: 44,
     position: "relative",
   },
   notiBadge: {
     position: "absolute",
-    top: -4,
-    right: -4,
+    top: -2,
+    right: -2,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
@@ -486,67 +461,67 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 4,
   },
-  infoMessageWrapper: {
+  syncIndicator: {
+    flexDirection: "row",
     paddingHorizontal: 20,
-    paddingVertical: 6,
+    paddingVertical: 10,
     alignItems: "center",
+    justifyContent: "center",
   },
   mainScrollContainer: { flex: 1 },
   scrollContentLayout: {
-    paddingTop: 32,
-    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingHorizontal: 16,
     paddingBottom: Platform.OS === "ios" ? 40 : 24,
   },
-  welcomeBanner: { marginBottom: 24 },
-  dashboardCardFrame: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    marginBottom: 28,
+  welcomeBanner: {
+    marginBottom: 32,
+    paddingHorizontal: 4,
   },
-  dashboardCardLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    paddingRight: 8,
+  greetingText: {
+    letterSpacing: 1.2,
+    marginBottom: 6,
   },
-  textBadgeOverlay: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    marginRight: 12,
+  sectionLabel: {
+    letterSpacing: 1,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
-  dashboardTextContainer: { justifyContent: "center", flex: 1 },
-  sectionTitle: { letterSpacing: 1.0, marginBottom: 12, paddingLeft: 2 },
   gridContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 24,
-    gap: 12,
+    marginBottom: 28,
+    gap: 14,
   },
   gridCard: {
     flex: 1,
-    borderRadius: 20,
-    borderWidth: 1.5,
+    borderRadius: 24,
+    borderWidth: 1,
     minHeight: 160,
   },
   cardInternalWrapper: {
-    padding: 16,
+    padding: 18,
     flex: 1,
-    justifyContent: "flex-start",
+    justifyContent: "space-between",
   },
-  inlineStaticLabelBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    alignSelf: "flex-start",
-    marginBottom: 14,
+  cardActionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
   },
-  cardTitle: { letterSpacing: -0.3, marginBottom: 4 },
-  cardDesc: { lineHeight: 16 },
+  iconIndicatorBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardTitle: {
+    letterSpacing: -0.3,
+    marginBottom: 6,
+  },
+  cardDesc: {
+    lineHeight: 16,
+  },
 });
