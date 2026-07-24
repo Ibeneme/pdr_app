@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
-import { ActivityIndicator, View, Platform } from "react-native";
+import { ActivityIndicator, View, Platform, StatusBar } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 // Provider & Data Layer Imports
@@ -54,7 +54,7 @@ export default function RootLayout() {
 
 function RootLayoutInitializer() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const [isInitializing, setIsInitializing] = useState(true);
 
   console.log("🚀 RootLayoutInitializer mounted");
@@ -92,6 +92,9 @@ function RootLayoutInitializer() {
     checkAuthenticationLifecycle();
   }, []);
 
+  // StatusBar Configuration: Inverting text/icon brightness based on dark mode status
+  const barStyle = isDark ? "light-content" : "dark-content";
+
   // Initialization State (Loading)
   if (isInitializing) {
     console.log("⏳ Showing loading screen (authentication check in progress)");
@@ -105,6 +108,7 @@ function RootLayoutInitializer() {
           backgroundColor: theme.background,
         }}
       >
+        <StatusBar barStyle={barStyle} backgroundColor={theme.background} />
         <ActivityIndicator size="large" color={theme.primary} />
       </SafeAreaView>
     );
@@ -112,26 +116,31 @@ function RootLayoutInitializer() {
 
   console.log("✅ Initialization complete. Rendering main navigation stack");
 
-  // Main Navigation Stack Wrapper
   if (Platform.OS === "android") {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
         style={{ flex: 1, backgroundColor: theme.background }}
       >
+        <StatusBar
+          barStyle={barStyle}
+          backgroundColor={theme.background}
+          translucent={false}
+        />
         <NavigationStack />
       </SafeAreaView>
     );
   }
 
+  // iOS
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <StatusBar barStyle={barStyle} backgroundColor={theme.background} />
       <NavigationStack />
     </View>
   );
 }
 
-// Reusable Clean navigation layer to prevent duplicate JSX code
 function NavigationStack() {
   return (
     <Stack screenOptions={{ headerShown: false }}>

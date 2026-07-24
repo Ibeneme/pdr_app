@@ -10,8 +10,8 @@ export interface PaymentRecord {
     userId: string;
     amount: number;
     reference: string;
-    serviceType: "offer_a_ride" | "deliver_a_parcel";
     status: "pending" | "success" | "failed";
+    paystackRawResponse?: Record<string, any>;
     createdAt: string;
     updatedAt: string;
 }
@@ -23,7 +23,7 @@ interface PaymentState {
     isLoading: boolean;
     error: string | null;
     isPaymentSuccess: boolean;
-    isEscrowReleaseSuccess: boolean; // Tracking flag for the new operation
+    isEscrowReleaseSuccess: boolean;
 }
 
 const initialState: PaymentState = {
@@ -36,14 +36,20 @@ const initialState: PaymentState = {
     isEscrowReleaseSuccess: false,
 };
 
-const BASE_URL = "/padiman_route/payments"; // Update path if your express root varies
+const BASE_URL = "/padiman_route/payments";
 
 // --- Async Thunks ---
 
 // 1. Kickstart Checkout Window generation with Paystack
 export const initializePayment = createAsyncThunk<
     { checkoutUrl: string; reference: string },
-    { negotiationId: string; serviceType: "offer_a_ride" | "deliver_a_parcel"; email: string; amount?: number; userId?: string },
+    {
+        negotiationId: string;
+        serviceType?: string;
+        email: string;
+        amount?: number;
+        userId?: string;
+    },
     { rejectValue: string }
 >(
     "payment/initialize",
@@ -54,11 +60,15 @@ export const initializePayment = createAsyncThunk<
             console.log("📥 [SLICE_THUNK] Initialization Response payload captured:", response.data);
             return {
                 checkoutUrl: response.data.checkoutUrl,
-                reference: response.data.reference
+                reference: response.data.reference,
             };
         } catch (error: any) {
             console.error("❌ [SLICE_THUNK] Initialization dropped out:", error.response?.data);
-            return rejectWithValue(error.response?.data?.message || error.response?.data?.error || "Payment generation failed");
+            return rejectWithValue(
+                error.response?.data?.message ||
+                error.response?.data?.error ||
+                "Payment generation failed"
+            );
         }
     }
 );
@@ -71,12 +81,14 @@ export const verifyPayment = createAsyncThunk<any, string, { rejectValue: string
             const response = await axiosInstance.get(`${BASE_URL}/verify/${reference}`);
             return response.data;
         } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || "Payment verification failure");
+            return rejectWithValue(
+                error.response?.data?.message || "Payment verification failure"
+            );
         }
     }
 );
 
-// 3. NEW: Shift escrow balance item to spendable ledger balance parameters
+// 3. Shift escrow balance item to spendable ledger balance parameters
 export const releaseEscrowEarnings = createAsyncThunk<any, string, { rejectValue: string }>(
     "payment/releaseEscrow",
     async (negotiationId, { rejectWithValue }) => {
@@ -87,7 +99,11 @@ export const releaseEscrowEarnings = createAsyncThunk<any, string, { rejectValue
             return response.data;
         } catch (error: any) {
             console.error("❌ [SLICE_THUNK] Escrow release rejected:", error.response?.data);
-            return rejectWithValue(error.response?.data?.message || error.response?.data?.error || "Failed to clear escrow items");
+            return rejectWithValue(
+                error.response?.data?.message ||
+                error.response?.data?.error ||
+                "Failed to clear escrow items"
+            );
         }
     }
 );
@@ -105,7 +121,7 @@ const paymentSlice = createSlice({
             state.error = null;
             state.isPaymentSuccess = false;
             state.isEscrowReleaseSuccess = false;
-        }
+        },
     },
     extraReducers: (builder) => {
         builder
@@ -119,20 +135,20 @@ const paymentSlice = createSlice({
             })
             // Handle Payment Verification Successful
             .addCase(verifyPayment.fulfilled, (state, action) => {
-                console.log("🎉 [SLICE_FULFILLED] Payment captured successfully. Core records are marked PAID");
+                console.log("🎉 [SLICE_FULFILLED] Payment captured successfully.");
                 state.isLoading = false;
                 state.isPaymentSuccess = action.payload.success;
                 state.checkoutUrl = null;
             })
-            // NEW: Handle Escrow Earnings Release Successful
+            // Handle Escrow Earnings Release Successful
             .addCase(releaseEscrowEarnings.fulfilled, (state, action) => {
-                console.log("🎉 [SLICE_FULFILLED] Escrow unlocked cleanly. Wallet balance adjusted across application viewports");
+                console.log("🎉 [SLICE_FULFILLED] Escrow unlocked cleanly.");
                 state.isLoading = false;
                 state.isEscrowReleaseSuccess = action.payload.success;
             })
-            // Flush state on logout event hook
+            // Flush state on logout
             .addCase(logout, (state) => {
-                console.log("🔒 [SLICE_LOGOUT] Purging all credential payment traces");
+                console.log("🔒 [SLICE_LOGOUT] Purging all payment traces");
                 state.payments = [];
                 state.checkoutUrl = null;
                 state.activeReference = null;
@@ -155,7 +171,7 @@ const paymentSlice = createSlice({
                     state.isPaymentSuccess = false;
                     state.isEscrowReleaseSuccess = false;
                     state.error = action.payload || "Payment handling system error event";
-                    console.error(`🚨 [SLICE_REJECTED] Global payment exception caught: ${state.error}`);
+                    console.error(`🚨 [SLICE_REJECTED] Payment exception caught: ${state.error}`);
                 }
             );
     },

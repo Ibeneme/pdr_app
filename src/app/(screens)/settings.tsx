@@ -21,12 +21,23 @@ import {
   ChevronRight,
 } from "lucide-react-native";
 import { AppText } from "@/components/AppText";
-import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
+
+// Soft pastel chip palette, one tint per row, matching the reference mood
+// board's colored icon squares.
+const PASTELS = {
+  sky: { bg: "#DBEAFE", icon: "#2563EB" },
+  lavender: { bg: "#EDE9FE", icon: "#7C3AED" },
+  mint: { bg: "#D1FAE5", icon: "#059669" },
+  peach: { bg: "#FFE4D6", icon: "#EA580C" },
+};
 
 export default function SettingsScreen() {
   const { theme, isDark, setMode } = useTheme();
   const [darkMode, setDarkMode] = React.useState(isDark);
+
+  const pageBg = isDark ? theme.background : "#f4f4f4";
+  const cardBg = isDark ? theme.surface : "#FFFFFF";
 
   const toggleDarkMode = () => {
     const newMode = !darkMode;
@@ -44,32 +55,26 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: pageBg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* PREMIUM HEADER GRADIENT */}
-      <LinearGradient
-        colors={isDark ? ["#2A1B4D", theme.surface] : ["#F8F5FF", "#FFFFFF"]}
-        style={styles.headerGradient}
-      >
-        <SafeAreaView style={styles.headerSafeArea}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
-              <ArrowLeft size={24} color={theme.text} />
-            </TouchableOpacity>
+      <SafeAreaView style={styles.headerSafeArea}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.backButton, { backgroundColor: cardBg }]}
+            activeOpacity={0.7}
+          >
+            <ArrowLeft size={20} color={theme.text} />
+          </TouchableOpacity>
 
-            <AppText size={20} weight="bold" color={theme.text}>
-              Settings
-            </AppText>
+          <AppText size={19} weight="bold" color={theme.text}>
+            Settings
+          </AppText>
 
-            <View style={{ width: 40 }} />
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+          <View style={{ width: 40 }} />
+        </View>
+      </SafeAreaView>
 
       <ScrollView
         style={styles.mainScrollView}
@@ -91,18 +96,18 @@ export default function SettingsScreen() {
           ACCOUNT
         </AppText>
 
-        <View
-          style={[
-            styles.settingsCard,
-            { backgroundColor: theme.surface, borderColor: theme.border },
-          ]}
-        >
-          <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7}>
-            <View style={styles.iconWrapper}>
-              <Shield size={22} color={theme.textMuted} />
+        <View style={[styles.settingsCard, { backgroundColor: cardBg }]}>
+          <TouchableOpacity
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            activeOpacity={0.7}
+          >
+            <View
+              style={[styles.iconChip, { backgroundColor: PASTELS.sky.bg }]}
+            >
+              <Shield size={20} color={PASTELS.sky.icon} />
             </View>
             <View style={styles.settingsTextContainer}>
-              <AppText size={16} weight="medium" color={theme.text}>
+              <AppText size={16} weight="bold" color={theme.text}>
                 Privacy & Security
               </AppText>
               <AppText
@@ -132,22 +137,22 @@ export default function SettingsScreen() {
           PREFERENCES
         </AppText>
 
-        <View
-          style={[
-            styles.settingsCard,
-            { backgroundColor: theme.surface, borderColor: theme.border },
-          ]}
-        >
-          <View style={styles.settingsRow}>
-            <View style={styles.iconWrapper}>
+        <View style={[styles.settingsCard, { backgroundColor: cardBg }]}>
+          <View style={[styles.settingsRow, { borderBottomWidth: 0 }]}>
+            <View
+              style={[
+                styles.iconChip,
+                { backgroundColor: PASTELS.lavender.bg },
+              ]}
+            >
               {isDark ? (
-                <Moon size={22} color={theme.textMuted} />
+                <Moon size={20} color={PASTELS.lavender.icon} />
               ) : (
-                <Sun size={22} color={theme.textMuted} />
+                <Sun size={20} color={PASTELS.lavender.icon} />
               )}
             </View>
             <View style={styles.settingsTextContainer}>
-              <AppText size={16} weight="medium" color={theme.text}>
+              <AppText size={16} weight="bold" color={theme.text}>
                 Dark Mode
               </AppText>
               <AppText
@@ -161,7 +166,7 @@ export default function SettingsScreen() {
             <Switch
               value={darkMode}
               onValueChange={toggleDarkMode}
-              trackColor={{ false: "#767577", true: theme.primary + "80" }}
+              trackColor={{ false: "#D1D5DB", true: theme.primary + "80" }}
               thumbColor={darkMode ? theme.primary : "#f4f3f4"}
             />
           </View>
@@ -182,22 +187,19 @@ export default function SettingsScreen() {
           SUPPORT & INFO
         </AppText>
 
-        <View
-          style={[
-            styles.settingsCard,
-            { backgroundColor: theme.surface, borderColor: theme.border },
-          ]}
-        >
+        <View style={[styles.settingsCard, { backgroundColor: cardBg }]}>
           <TouchableOpacity
             style={styles.settingsRow}
             activeOpacity={0.7}
             onPress={() => handleOpenLink("https://www.padimanroute.com")}
           >
-            <View style={styles.iconWrapper}>
-              <HelpCircle size={22} color={theme.textMuted} />
+            <View
+              style={[styles.iconChip, { backgroundColor: PASTELS.mint.bg }]}
+            >
+              <HelpCircle size={20} color={PASTELS.mint.icon} />
             </View>
             <View style={styles.settingsTextContainer}>
-              <AppText size={16} weight="medium" color={theme.text}>
+              <AppText size={16} weight="bold" color={theme.text}>
                 Help Center
               </AppText>
             </View>
@@ -209,11 +211,13 @@ export default function SettingsScreen() {
             activeOpacity={0.7}
             onPress={() => handleOpenLink("https://www.padimanroute.com")}
           >
-            <View style={styles.iconWrapper}>
-              <Info size={22} color={theme.textMuted} />
+            <View
+              style={[styles.iconChip, { backgroundColor: PASTELS.peach.bg }]}
+            >
+              <Info size={20} color={PASTELS.peach.icon} />
             </View>
             <View style={styles.settingsTextContainer}>
-              <AppText size={16} weight="medium" color={theme.text}>
+              <AppText size={16} weight="bold" color={theme.text}>
                 About Padiman Route
               </AppText>
               <AppText
@@ -234,11 +238,6 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerGradient: {
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-
-  },
   headerSafeArea: {
     paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
   },
@@ -249,30 +248,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  backButton: { padding: 8 },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
   mainScrollView: { flex: 1 },
   scrollContentLayout: {
-    paddingTop: 24,
+    paddingTop: 16,
     paddingHorizontal: 16,
     paddingBottom: Platform.OS === "ios" ? 40 : 40,
   },
 
   settingsCard: {
     borderRadius: 24,
-    borderWidth: 1.5,
-    marginBottom: 28,
+    marginBottom: 24,
     overflow: "hidden",
+    paddingHorizontal: 6,
   },
   settingsRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-  
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
   },
-  iconWrapper: {
-    width: 40,
+  iconChip: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: "center",
     alignItems: "center",
   },
   settingsTextContainer: {

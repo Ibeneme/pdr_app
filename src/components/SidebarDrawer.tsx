@@ -1,19 +1,19 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  StyleSheet,
+  Modal,
   View,
   TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-  Modal,
+  TouchableWithoutFeedback,
+  StyleSheet,
+  Animated,
+  Dimensions,
   Platform,
   StatusBar,
-  useWindowDimensions,
-  ActivityIndicator,
+  ScrollView,
   Image,
-  Linking,
+  ActivityIndicator,
 } from "react-native";
-import { useDispatch, useSelector } from "react-redux";
+import { useRouter, usePathname } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { AppText } from "@/components/AppText";
 import {
@@ -29,392 +29,412 @@ import {
   Sun,
   Moon,
 } from "lucide-react-native";
-import { AppDispatch, RootState } from "@/api/store";
-import { clearUser, getProfile } from "@/api/slices/user.slice";
-import { removeAuthToken } from "@/api/secureStore";
-import { logout } from "@/api/slices/auth.slice";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const DRAWER_WIDTH = Math.min(340, SCREEN_WIDTH * 0.82);
 
 interface SidebarDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  onNavigate: (route: string) => void;
+  onNavigate?: (route: string) => void;
+  userName?: string;
+  userEmail?: string;
+  profileImage?: string | null;
 }
+
+// NOTE: these routes must be the *real* paths your router understands.
+// handleNavigate hands them straight to onNavigate (or router.push as a
+// fallback), so whatever string lives here is exactly what gets pushed.
+const NAV_ITEMS = [
+  { label: "My Profile", route: "/(screens)/profile", icon: User },
+  { label: "Orders & Logs", route: "/(features)/all_requests", icon: History },
+  { label: "Wallet", route: "/(screens)/wallet", icon: Wallet },
+  { label: "Withdrawals", route: "/(screens)/withdrawal", icon: ArrowUpRight },
+  { label: "System Settings", route: "/(screens)/settings", icon: Settings },
+];
+
+const SUPPORT_ROUTE = "/(screens)/support";
+const LOGOUT_ACTION = "LOGOUT";
 
 export default function SidebarDrawer({
   isOpen,
   onClose,
   onNavigate,
+  userName = "Padiman Operator",
+  userEmail = "",
+  profileImage,
 }: SidebarDrawerProps) {
   const { theme: colors, isDark, setMode } = useTheme();
-  const { width } = useWindowDimensions();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const dispatch = useDispatch<AppDispatch>();
-  const { profile } = useSelector((state: RootState) => state.user);
+  const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // Email Dispatcher Function
-  const handleContactAdmin = async () => {
-    // You can customize the email address here
-    const email = "padimanroute@gmail.com";
-    const subject = "Support Request";
-    const body = "Hello Admin, I would like to reach out regarding...";
-    const url = `mailto:${email}?subject=${encodeURIComponent(
-      subject
-    )}&body=${encodeURIComponent(body)}`;
-
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      }
-    } catch (error) {
-      console.error("Could not open email app", error);
+  // Animation
+  useEffect(() => {
+    if (isOpen) {
+      Animated.parallel([
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          friction: 8,
+          tension: 65,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 280,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(translateX, {
+          toValue: -DRAWER_WIDTH,
+          duration: 240,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
+  }, [isOpen]);
+
+  // Closes the drawer first, then hands the route off (either to the
+  // parent's onNavigate, or directly to expo-router as a fallback) once the
+  // close animation has had time to start — avoids the drawer and the next
+  // screen fighting over the same frame.
+  const handleNavigate = (route: string) => {
+    onClose();
+    setTimeout(() => {
+      if (onNavigate) {
+        onNavigate(route);
+      } else {
+        router.push(route as any);
+      }
+    }, 180);
   };
 
-  useEffect(() => {
-    if (isOpen && !profile) {
-      setIsLoading(true);
-      dispatch(getProfile())
-        .unwrap()
-        .finally(() => {
-          setIsLoading(false);
-        });
-    }
-  }, [isOpen, profile, dispatch]);
+  const handleLogout = () => {
+    console.log("Logging out...");
+    handleNavigate(LOGOUT_ACTION);
+  };
 
   const getInitials = () => {
-    if (!profile?.fullName) return "PR";
-    const nameParts = profile.fullName.trim().split(" ");
-    if (nameParts.length === 1) {
-      return nameParts[0].substring(0, 2).toUpperCase();
-    }
-    return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+    if (!userName) return "PR";
+    const parts = userName.trim().split(" ");
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
-
-  const hasProfileImage = !!profile?.profileImage;
 
   return (
     <Modal
-      animationType="none"
-      transparent={true}
       visible={isOpen}
+      transparent
+      animationType="none"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlayContainer}>
-        <TouchableOpacity
-          style={styles.backdropClickArea}
-          activeOpacity={1}
-          onPress={onClose}
-        />
+      <View style={StyleSheet.absoluteFill}>
+        {/* Backdrop */}
+        <TouchableWithoutFeedback onPress={onClose}>
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: "rgba(0,0,0,0.45)", opacity: backdropOpacity },
+            ]}
+          />
+        </TouchableWithoutFeedback>
 
-        <View
+        {/* Drawer */}
+        <Animated.View
           style={[
-            styles.sidebarMenuPanel,
-            { backgroundColor: colors.background, width: width * 0.78 },
+            styles.drawer,
+            {
+              backgroundColor: colors.background,
+              transform: [{ translateX }],
+            },
           ]}
         >
-          <SafeAreaView
-            style={[
-              styles.drawerHeaderContainer,
-              {
-                backgroundColor: colors.surface,
-                borderBottomColor: colors.border,
-              },
-            ]}
-          >
-            <View style={styles.drawerHeaderProfileRow}>
-              <View
-                style={[
-                  styles.avatarTextBadgePlaceholder,
-                  { backgroundColor: colors.primary },
-                ]}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : hasProfileImage ? (
-                  <Image
-                    source={{ uri: profile.profileImage }}
-                    style={styles.avatarImageThumbnail}
-                  />
-                ) : (
-                  <AppText size={16} weight="bold" color="#FFF">
-                    {getInitials()}
-                  </AppText>
-                )}
+          {/* Header */}
+          <View style={[styles.header, { backgroundColor: "#111318" }]}>
+            <View style={styles.headerContent}>
+              <View style={styles.avatarContainer}>
+                <View style={styles.avatarRing}>
+                  {isLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : profileImage ? (
+                    <Image
+                      source={{ uri: profileImage }}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <AppText size={18} weight="bold" color="#fff">
+                      {getInitials()}
+                    </AppText>
+                  )}
+                </View>
               </View>
 
               <TouchableOpacity
+                style={styles.closeBtn}
                 onPress={onClose}
-                style={[
-                  styles.closeDrawerBtn,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                  },
-                ]}
-                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <X color={colors.text} size={18} />
+                <X color="#fff" size={20} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.userMetaTextContainer}>
-              <AppText
-                size={16}
-                weight="bold"
-                color={colors.text}
-                numberOfLines={1}
-              >
-                {isLoading
-                  ? "Loading profile..."
-                  : profile?.fullName || "Padiman Operator"}
+            <View style={styles.userInfo}>
+              <AppText size={17} weight="bold" color="#fff">
+                {userName}
               </AppText>
-              <AppText
-                size={12}
-                color={colors.textMuted}
-                numberOfLines={1}
-                style={{ marginTop: 2 }}
-              >
-                {isLoading
-                  ? "Fetching details..."
-                  : profile?.email || "No credentials found"}
-              </AppText>
+              {userEmail && (
+                <AppText size={13} color="rgba(255,255,255,0.6)">
+                  {userEmail}
+                </AppText>
+              )}
             </View>
-          </SafeAreaView>
+          </View>
 
+          {/* Menu Content */}
           <ScrollView
-            style={styles.sidebarLinkScroller}
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {[
-              { label: "My Profile", route: "PROFILE", icon: User },
-              { label: "Orders & Logs", route: "HISTORY", icon: History },
-              { label: "Wallet", route: "WALLET", icon: Wallet },
-              {
-                label: "Withdrawals",
-                route: "WITHDRAWALS",
-                icon: ArrowUpRight,
-              },
-              { label: "System Settings", route: "SETTINGS", icon: Settings },
-            ].map((item, index) => {
+            <AppText
+              size={11.5}
+              weight="bold"
+              color={colors.textMuted}
+              style={styles.sectionTitle}
+            >
+              MENU
+            </AppText>
+
+            {NAV_ITEMS.map((item) => {
               const IconComponent = item.icon;
+              const isActive = pathname === item.route;
+
               return (
                 <TouchableOpacity
-                  key={index}
+                  key={item.route}
                   style={[
-                    styles.sidebarLinkRow,
-                    { borderBottomColor: colors.border },
+                    styles.menuItem,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: isActive ? colors.primary : "transparent",
+                    },
                   ]}
-                  onPress={() => onNavigate(item.route)}
-                  activeOpacity={0.7}
+                  onPress={() => handleNavigate(item.route)}
+                  activeOpacity={0.75}
                 >
-                  <View style={styles.sidebarLinkLeft}>
-                    <IconComponent
-                      color={colors.textMuted}
-                      size={20}
-                      style={styles.sidebarLinkIcon}
-                    />
-                    <AppText size={14} weight="medium" color={colors.text}>
+                  <View style={styles.menuItemLeft}>
+                    <View
+                      style={[
+                        styles.iconBox,
+                        { backgroundColor: `${colors.text}0D` },
+                      ]}
+                    >
+                      <IconComponent color={colors.text} size={18} />
+                    </View>
+                    <AppText size={15} weight="semibold" color={colors.text}>
                       {item.label}
                     </AppText>
                   </View>
-                  <ChevronRight color={colors.border} size={16} />
+                  <ChevronRight size={18} color={colors.textMuted} />
                 </TouchableOpacity>
               );
             })}
 
-            {/* Added Contact Admin Button */}
+            {/* Theme Toggle */}
             <TouchableOpacity
               style={[
-                styles.sidebarLinkRow,
-                { borderBottomColor: colors.border },
-              ]}
-              onPress={handleContactAdmin}
-              activeOpacity={0.7}
-            >
-              <View style={styles.sidebarLinkLeft}>
-                <HelpCircle
-                  color={colors.textMuted}
-                  size={20}
-                  style={styles.sidebarLinkIcon}
-                />
-                <AppText size={14} weight="medium" color={colors.text}>
-                  Contact Admin & Support
-                </AppText>
-              </View>
-            </TouchableOpacity>
-          </ScrollView>
-
-          <View
-            style={[
-              styles.sidebarFooterControl,
-              {
-                borderTopColor: colors.border,
-                backgroundColor: colors.surface,
-              },
-            ]}
-          >
-            <TouchableOpacity
-              style={[
-                styles.themeRowToggle,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                },
+                styles.menuItem,
+                styles.themeToggle,
+                { backgroundColor: colors.surface },
               ]}
               onPress={() => setMode(isDark ? "light" : "dark")}
-              activeOpacity={0.8}
+              activeOpacity={0.75}
             >
-              <View style={styles.sidebarLinkLeft}>
-                {isDark ? (
-                  <Sun size={18} color={colors.textMuted} />
-                ) : (
-                  <Moon size={18} color={colors.textMuted} />
-                )}
-                <AppText
-                  size={13}
-                  weight="medium"
-                  color={colors.text}
-                  style={{ marginLeft: 10 }}
+              <View style={styles.menuItemLeft}>
+                <View
+                  style={[
+                    styles.iconBox,
+                    { backgroundColor: `${colors.text}0D` },
+                  ]}
                 >
-                  Interface Mode
+                  {isDark ? (
+                    <Sun size={18} color={colors.text} />
+                  ) : (
+                    <Moon size={18} color={colors.text} />
+                  )}
+                </View>
+                <AppText size={15} weight="semibold" color={colors.text}>
+                  {isDark ? "Light Mode" : "Dark Mode"}
                 </AppText>
               </View>
-              <AppText size={11} weight="bold" color={colors.primary}>
-                {isDark ? "LIGHT" : "DARK"}
-              </AppText>
             </TouchableOpacity>
 
+            <AppText
+              size={11.5}
+              weight="bold"
+              color={colors.textMuted}
+              style={[styles.sectionTitle, { marginTop: 28 }]}
+            >
+              SUPPORT
+            </AppText>
+
             <TouchableOpacity
-              style={[
-                styles.logOutButton,
-                { backgroundColor: isDark ? "rgba(239,68,68,0.1)" : "#FEF2F2" },
-              ]}
-              onPress={async () => {
-                await removeAuthToken();
-                dispatch(logout());
-                dispatch(clearUser());
-              }}
+              style={[styles.menuItem, { backgroundColor: colors.surface }]}
+              onPress={() => handleNavigate(SUPPORT_ROUTE)}
+              activeOpacity={0.75}
+            >
+              <View style={styles.menuItemLeft}>
+                <View
+                  style={[
+                    styles.iconBox,
+                    { backgroundColor: `${colors.text}0D` },
+                  ]}
+                >
+                  <HelpCircle color={colors.text} size={18} />
+                </View>
+                <AppText size={15} weight="semibold" color={colors.text}>
+                  Contact Support
+                </AppText>
+              </View>
+              <ChevronRight size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+
+            {/* Logout */}
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
               activeOpacity={0.8}
             >
-              <LogOut color="#EF4444" size={18} style={{ marginRight: 8 }} />
-              <AppText size={14} weight="bold" color="#EF4444">
-                Log Out Session
+              <LogOut color="#EF4444" size={20} />
+              <AppText
+                size={15}
+                weight="bold"
+                color="#EF4444"
+                style={{ marginLeft: 10 }}
+              >
+                Log Out
               </AppText>
             </TouchableOpacity>
-          </View>
-        </View>
+          </ScrollView>
+        </Animated.View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  modalOverlayContainer: {
-    flex: 1,
-    flexDirection: "row-reverse",
-    backgroundColor: "rgba(0, 0, 0, 0.40)",
-  },
-  backdropClickArea: {
-    flex: 1,
-  },
-  sidebarMenuPanel: {
-    height: "100%",
-    shadowColor: "#000",
-    shadowOffset: { width: -4, height: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 16,
-  },
-  drawerHeaderContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    paddingTop:
-      Platform.OS === "android"
-        ? StatusBar.currentHeight
-          ? StatusBar.currentHeight + 24
-          : 32
-        : 20,
-  },
-  drawerHeaderProfileRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-  },
-  avatarTextBadgePlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
+  drawer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: DRAWER_WIDTH,
+    borderTopRightRadius: 28,
+    borderBottomRightRadius: 28,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: -6, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 20,
   },
-  avatarImageThumbnail: {
-    width: 48,
-    height: 48,
-    resizeMode: "cover",
+  header: {
+    paddingTop:
+      Platform.OS === "android" ? (StatusBar.currentHeight || 20) + 12 : 60,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
-  closeDrawerBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1,
+  headerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  avatarContainer: {
+    marginBottom: 16,
+  },
+  avatarRing: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    borderWidth: 2.5,
+    borderColor: "rgba(255,255,255,0.25)",
+    padding: 4,
+    backgroundColor: "rgba(255,255,255,0.1)",
     justifyContent: "center",
     alignItems: "center",
   },
-  userMetaTextContainer: {
+  avatarImage: {
     width: "100%",
-    paddingLeft: 16,
-    paddingBottom: 32,
+    height: "100%",
+    borderRadius: 16,
   },
-  sidebarLinkScroller: {
+  closeBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  userInfo: {
+    marginTop: 4,
+  },
+  scrollView: {
     flex: 1,
-    paddingTop: 12,
-    paddingHorizontal: 8,
   },
-  sidebarLinkRow: {
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  sectionTitle: {
+    paddingHorizontal: 4,
+    marginBottom: 10,
+    letterSpacing: 0.6,
+  },
+  menuItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 16,
-    borderBottomWidth: 0.5,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    marginBottom: 6,
   },
-  sidebarLinkLeft: {
+  menuItemLeft: {
     flexDirection: "row",
     alignItems: "center",
   },
-  sidebarLinkIcon: {
+  iconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 14,
   },
-  sidebarFooterControl: {
-    paddingHorizontal: 16,
-    paddingBottom: Platform.OS === "ios" ? 40 : 24,
-    borderTopWidth: 1,
-    paddingTop: 16,
+  themeToggle: {
+    marginTop: 8,
   },
-  themeRowToggle: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    height: 48,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-  },
-  logOutButton: {
+  logoutButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    height: 50,
-    borderRadius: 14,
-    marginTop: 2,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    paddingVertical: 18,
+    borderRadius: 999,
+    marginTop: 32,
   },
 });

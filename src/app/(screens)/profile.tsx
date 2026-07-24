@@ -14,7 +14,21 @@ import {
   Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { ArrowLeft, Camera, Check, User } from "lucide-react-native";
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  User,
+  Bell,
+  Phone,
+  Mail,
+  MapPin,
+  Briefcase,
+  Building2,
+  IdCard,
+  ChevronRight,
+  Car,
+} from "lucide-react-native";
 import { useTheme } from "@/contexts/ThemeContext";
 import { AppText } from "@/components/AppText";
 
@@ -32,6 +46,17 @@ import * as ImagePicker from "expo-image-picker";
 
 // Import City Selector
 import { NigeriaCitiesGrid, NigeriaCity } from "@/components/NigeriaCitiesGrid";
+
+// Soft pastel chip palette, one tint per info row, matching the reference
+// mood board's colored icon squares.
+const PASTELS = {
+  sky: { bg: "#DBEAFE", icon: "#2563EB" },
+  lavender: { bg: "#EDE9FE", icon: "#7C3AED" },
+  mint: { bg: "#D1FAE5", icon: "#059669" },
+  peach: { bg: "#FFE4D6", icon: "#EA580C" },
+  butter: { bg: "#FEF3C7", icon: "#D97706" },
+  rose: { bg: "#FFE1E6", icon: "#E11D48" },
+};
 
 export default function ProfileScreen() {
   const { theme: colors, isDark } = useTheme();
@@ -55,6 +80,10 @@ export default function ProfileScreen() {
   const [city, setCity] = useState("");
   const [driverLicenseNumber, setDriverLicenseNumber] = useState("");
   const [idMeans, setIdMeans] = useState("");
+
+  const pageBg = isDark ? colors.background : "#f4f4f4";
+  const cardBg = isDark ? colors.surface : "#FFFFFF";
+  const tileBg = isDark ? "#1A1A1A" : "#F4F4F1";
 
   // Load profile
   useEffect(() => {
@@ -109,8 +138,7 @@ export default function ProfileScreen() {
           style={[
             styles.genderOption,
             {
-              backgroundColor: gender === g ? colors.primary : colors.surface,
-              borderColor: colors.border,
+              backgroundColor: gender === g ? colors.primary : tileBg,
             },
           ]}
           onPress={() => setGender(g)}
@@ -190,28 +218,23 @@ export default function ProfileScreen() {
   // ====================== EDIT MODE ======================
   if (isEditing) {
     return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
-      >
+      <SafeAreaView style={[styles.container, { backgroundColor: pageBg }]}>
         <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
         <View style={styles.topHeaderControlRow}>
           <TouchableOpacity
-            style={[
-              styles.backBoxCircle,
-              { backgroundColor: isDark ? "#1E1E1E" : "#F1F5F9" },
-            ]}
+            style={[styles.backBoxCircle, { backgroundColor: cardBg }]}
             onPress={() => setIsEditing(false)}
           >
             <ArrowLeft size={20} color={colors.text} />
           </TouchableOpacity>
 
-          <AppText size={20} weight="bold" color={colors.text}>
+          <AppText size={19} weight="bold" color={colors.text}>
             Edit Profile
           </AppText>
 
           <TouchableOpacity onPress={handleSaveProfile}>
-            <AppText size={16} weight="bold" color={colors.primary}>
+            <AppText size={15} weight="bold" color={colors.primary}>
               Save
             </AppText>
           </TouchableOpacity>
@@ -257,10 +280,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={[
                 styles.cameraOverlayIndicatorBadge,
-                {
-                  backgroundColor: colors.primary,
-                  borderColor: colors.background,
-                },
+                { backgroundColor: colors.primary, borderColor: pageBg },
               ]}
               onPress={pickAndUploadImage}
             >
@@ -268,187 +288,164 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Full Name
-          </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={fullName}
-            onChangeText={setFullName}
-            placeholder="Enter full name"
-          />
-
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Phone Number
-          </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={mobileNumber}
-            onChangeText={setMobileNumber}
-            keyboardType="phone-pad"
-            placeholder="Enter phone number"
-          />
-
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Gender
-          </AppText>
-          {renderGenderSelector()}
-
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Email
-          </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            placeholder="Enter email"
-          />
-
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Address
-          </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Enter address"
-          />
-
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Occupation
-          </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={occupation}
-            onChangeText={setOccupation}
-            placeholder="Enter occupation"
-          />
-
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            City
-          </AppText>
-          <TouchableOpacity onPress={() => setShowCityModal(true)}>
-            <View
+          <View style={[styles.formCard, { backgroundColor: cardBg }]}>
+            <AppText
+              size={12}
+              color={colors.textMuted}
+              style={styles.fieldLabelSpacing}
+            >
+              Full Name
+            </AppText>
+            <TextInput
               style={[
                 styles.profileInputFrameField,
-                {
-                  backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                  justifyContent: "center",
-                  borderColor: colors.border,
-                },
+                { backgroundColor: tileBg, color: colors.text },
               ]}
+              value={fullName}
+              onChangeText={setFullName}
+              placeholder="Enter full name"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <AppText
+              size={12}
+              color={colors.textMuted}
+              style={styles.fieldLabelSpacing}
             >
-              <AppText color={city ? colors.text : colors.textMuted}>
-                {city || "Select City"}
-              </AppText>
-            </View>
-          </TouchableOpacity>
+              Phone Number
+            </AppText>
+            <TextInput
+              style={[
+                styles.profileInputFrameField,
+                { backgroundColor: tileBg, color: colors.text },
+              ]}
+              value={mobileNumber}
+              onChangeText={setMobileNumber}
+              keyboardType="phone-pad"
+              placeholder="Enter phone number"
+              placeholderTextColor={colors.textMuted}
+            />
 
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Driver License Number
-          </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={driverLicenseNumber}
-            onChangeText={setDriverLicenseNumber}
-            placeholder="Enter license number (if driver)"
-          />
+            <AppText
+              size={12}
+              color={colors.textMuted}
+              style={styles.fieldLabelSpacing}
+            >
+              Gender
+            </AppText>
+            {renderGenderSelector()}
 
-          <AppText
-            size={12}
-            color={colors.textMuted}
-            style={styles.fieldLabelSpacing}
-          >
-            Means of Identification
-          </AppText>
-          <TextInput
-            style={[
-              styles.profileInputFrameField,
-              {
-                backgroundColor: isDark ? "#1A1A1A" : "#F8FAFC",
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={idMeans}
-            onChangeText={setIdMeans}
-            placeholder="Enter ID type"
-          />
+            <AppText
+              size={12}
+              color={colors.textMuted}
+              style={styles.fieldLabelSpacing}
+            >
+              Email
+            </AppText>
+            <TextInput
+              style={[
+                styles.profileInputFrameField,
+                { backgroundColor: tileBg, color: colors.text },
+              ]}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              placeholder="Enter email"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <AppText
+              size={12}
+              color={colors.textMuted}
+              style={styles.fieldLabelSpacing}
+            >
+              Address
+            </AppText>
+            <TextInput
+              style={[
+                styles.profileInputFrameField,
+                { backgroundColor: tileBg, color: colors.text },
+              ]}
+              value={address}
+              onChangeText={setAddress}
+              placeholder="Enter address"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <AppText
+              size={12}
+              color={colors.textMuted}
+              style={styles.fieldLabelSpacing}
+            >
+              Occupation
+            </AppText>
+            <TextInput
+              style={[
+                styles.profileInputFrameField,
+                { backgroundColor: tileBg, color: colors.text },
+              ]}
+              value={occupation}
+              onChangeText={setOccupation}
+              placeholder="Enter occupation"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <AppText
+              size={12}
+              color={colors.textMuted}
+              style={styles.fieldLabelSpacing}
+            >
+              City
+            </AppText>
+            <TouchableOpacity onPress={() => setShowCityModal(true)}>
+              <View
+                style={[
+                  styles.profileInputFrameField,
+                  { backgroundColor: tileBg, justifyContent: "center" },
+                ]}
+              >
+                <AppText color={city ? colors.text : colors.textMuted}>
+                  {city || "Select City"}
+                </AppText>
+              </View>
+            </TouchableOpacity>
+
+            <AppText
+              size={12}
+              color={colors.textMuted}
+              style={styles.fieldLabelSpacing}
+            >
+              Driver License Number
+            </AppText>
+            <TextInput
+              style={[
+                styles.profileInputFrameField,
+                { backgroundColor: tileBg, color: colors.text },
+              ]}
+              value={driverLicenseNumber}
+              onChangeText={setDriverLicenseNumber}
+              placeholder="Enter license number (if driver)"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <AppText
+              size={12}
+              color={colors.textMuted}
+              style={styles.fieldLabelSpacing}
+            >
+              Means of Identification
+            </AppText>
+            <TextInput
+              style={[
+                styles.profileInputFrameField,
+                { backgroundColor: tileBg, color: colors.text },
+              ]}
+              value={idMeans}
+              onChangeText={setIdMeans}
+              placeholder="Enter ID type"
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
         </ScrollView>
 
         {/* City Selection Modal */}
@@ -472,210 +469,184 @@ export default function ProfileScreen() {
   }
 
   // ====================== VIEW MODE ======================
+  const infoRows = [
+    {
+      key: "fullName",
+      label: "Full Name",
+      value: profile?.fullName,
+      Icon: User,
+      tint: PASTELS.lavender,
+    },
+    {
+      key: "phone",
+      label: "Mobile Number",
+      value: profile?.phone,
+      Icon: Phone,
+      tint: PASTELS.sky,
+    },
+    {
+      key: "email",
+      label: "Email",
+      value: profile?.email,
+      Icon: Mail,
+      tint: PASTELS.mint,
+    },
+    {
+      key: "address",
+      label: "Address",
+      value: profile?.address,
+      Icon: MapPin,
+      tint: PASTELS.peach,
+    },
+    {
+      key: "occupation",
+      label: "Occupation",
+      value: profile?.occupation,
+      Icon: Briefcase,
+      tint: PASTELS.butter,
+    },
+    {
+      key: "city",
+      label: "City",
+      value: profile?.city,
+      Icon: Building2,
+      tint: PASTELS.lavender,
+    },
+    {
+      key: "driverLicenseNumber",
+      label: "Driver License No",
+      value: profile?.driverLicenseNumber,
+      Icon: IdCard,
+      tint: PASTELS.sky,
+    },
+    {
+      key: "idMeans",
+      label: "Means of Identification",
+      value: profile?.idMeans,
+      Icon: IdCard,
+      tint: PASTELS.rose,
+    },
+  ].filter(
+    (row) =>
+      !!row.value &&
+      !(
+        row.key === "gender" && row.value?.toLowerCase() === "prefer not to say"
+      )
+  );
+
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: pageBg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       <View style={styles.topHeaderControlRow}>
         <TouchableOpacity
-          style={[
-            styles.backBoxCircle,
-            { backgroundColor: isDark ? "#1E1E1E" : "#F1F5F9" },
-          ]}
+          style={[styles.backBoxCircle, { backgroundColor: cardBg }]}
           onPress={() => router.back()}
         >
           <ArrowLeft size={20} color={colors.text} />
         </TouchableOpacity>
-        <AppText size={20} weight="bold" color={colors.text}>
+        <AppText size={19} weight="bold" color={colors.text}>
           Profile
         </AppText>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity
+          style={[styles.backBoxCircle, { backgroundColor: cardBg }]}
+          onPress={() => router.push("/(screens)/notifications")}
+        >
+          <Bell size={19} color={colors.text} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollBodyContainer}
       >
-        <View style={styles.avatarCenteredBlockAnchor}>
-          {profile?.profileImage ? (
-            <Image
-              source={{ uri: profile.profileImage }}
-              style={styles.userMainProfileAvatarFrame}
-            />
-          ) : (
+        {/* Hero identity card */}
+        <View style={[styles.identityHeroCard, { backgroundColor: cardBg }]}>
+          <View style={styles.avatarCenteredBlockAnchor}>
+            {profile?.profileImage ? (
+              <Image
+                source={{ uri: profile.profileImage }}
+                style={styles.userMainProfileAvatarFrame}
+              />
+            ) : (
+              <View
+                style={[
+                  styles.userMainProfileAvatarFrame,
+                  {
+                    backgroundColor: colors.primary,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  },
+                ]}
+              >
+                <AppText size={32} weight="bold" color="#FFFFFF">
+                  {getInitials(profile?.fullName || "U")}
+                </AppText>
+              </View>
+            )}
             <View
               style={[
-                styles.userMainProfileAvatarFrame,
-                {
-                  backgroundColor: colors.primary,
-                  justifyContent: "center",
-                  alignItems: "center",
-                },
+                styles.cameraOverlayIndicatorBadge,
+                { backgroundColor: "#22C55E", borderColor: cardBg },
               ]}
             >
-              <AppText size={32} weight="bold" color="#FFFFFF">
-                {getInitials(profile?.fullName || "U")}
-              </AppText>
+              <Check size={12} color="#FFFFFF" />
             </View>
-          )}
-          <View
-            style={[
-              styles.cameraOverlayIndicatorBadge,
-              {
-                backgroundColor: colors.primary,
-                borderColor: colors.background,
-              },
-            ]}
-          >
-            <Check size={12} color="#FFFFFF" />
           </View>
-        </View>
 
-        {/* Only show fields that have values */}
-        {profile?.fullName && (
-          <View
-            style={[
-              styles.readOnlyFieldBlockRow,
-              { borderColor: colors.border },
-            ]}
-          >
-            <AppText size={14} color={colors.textMuted}>
-              Full Name:
-            </AppText>
-            <AppText size={14} weight="medium" color={colors.text}>
+          {profile?.fullName && (
+            <AppText
+              size={18}
+              weight="bold"
+              color={colors.text}
+              style={{ marginTop: 12 }}
+            >
               {profile.fullName}
             </AppText>
-          </View>
-        )}
-
-        {profile?.phone && (
-          <View
-            style={[
-              styles.readOnlyFieldBlockRow,
-              { borderColor: colors.border },
-            ]}
-          >
-            <AppText size={14} color={colors.textMuted}>
-              Mobile Number:
-            </AppText>
-            <AppText size={14} weight="medium" color={colors.text}>
-              {profile.phone}
-            </AppText>
-          </View>
-        )}
-
-        {profile?.gender &&
-          profile.gender.toLowerCase() !== "prefer not to say" && (
-            <View
-              style={[
-                styles.readOnlyFieldBlockRow,
-                { borderColor: colors.border },
-              ]}
-            >
-              <AppText size={14} color={colors.textMuted}>
-                Gender:
-              </AppText>
-              <AppText size={14} weight="medium" color={colors.text}>
-                {profile.gender}
-              </AppText>
-            </View>
           )}
-
-        {profile?.email && (
-          <View
-            style={[
-              styles.readOnlyFieldBlockRow,
-              { borderColor: colors.border },
-            ]}
+          <AppText
+            size={12.5}
+            color={colors.textMuted}
+            style={{ marginTop: 2 }}
           >
-            <AppText size={14} color={colors.textMuted}>
-              Email:
-            </AppText>
-            <AppText size={14} weight="medium" color={colors.text}>
-              {profile.email}
-            </AppText>
-          </View>
-        )}
+            {profile?.isDriver ? "Verified Driver" : "Padiman Member"}
+          </AppText>
+        </View>
 
-        {profile?.address && (
-          <View
-            style={[
-              styles.readOnlyFieldBlockRow,
-              { borderColor: colors.border },
-            ]}
-          >
-            <AppText size={14} color={colors.textMuted}>
-              Address:
-            </AppText>
-            <AppText size={14} weight="medium" color={colors.text}>
-              {profile.address}
-            </AppText>
-          </View>
-        )}
-
-        {profile?.occupation && (
-          <View
-            style={[
-              styles.readOnlyFieldBlockRow,
-              { borderColor: colors.border },
-            ]}
-          >
-            <AppText size={14} color={colors.textMuted}>
-              Occupation:
-            </AppText>
-            <AppText size={14} weight="medium" color={colors.text}>
-              {profile.occupation}
-            </AppText>
-          </View>
-        )}
-
-        {profile?.city && (
-          <View
-            style={[
-              styles.readOnlyFieldBlockRow,
-              { borderColor: colors.border },
-            ]}
-          >
-            <AppText size={14} color={colors.textMuted}>
-              City:
-            </AppText>
-            <AppText size={14} weight="medium" color={colors.text}>
-              {profile.city}
-            </AppText>
-          </View>
-        )}
-
-        {profile?.driverLicenseNumber && (
-          <View
-            style={[
-              styles.readOnlyFieldBlockRow,
-              { borderColor: colors.border },
-            ]}
-          >
-            <AppText size={14} color={colors.textMuted}>
-              Driver License No:
-            </AppText>
-            <AppText size={14} weight="medium" color={colors.text}>
-              {profile.driverLicenseNumber}
-            </AppText>
-          </View>
-        )}
-
-        {profile?.idMeans && (
-          <View
-            style={[
-              styles.readOnlyFieldBlockRow,
-              { borderColor: colors.border },
-            ]}
-          >
-            <AppText size={14} color={colors.textMuted}>
-              Means of Identification:
-            </AppText>
-            <AppText size={14} weight="medium" color={colors.text}>
-              {profile.idMeans}
-            </AppText>
+        {/* Info rows */}
+        {infoRows.length > 0 && (
+          <View style={[styles.infoListCard, { backgroundColor: cardBg }]}>
+            {infoRows.map((row, idx) => (
+              <View
+                key={row.key}
+                style={[
+                  styles.infoRow,
+                  idx === infoRows.length - 1 && { borderBottomWidth: 0 },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.infoIconChip,
+                    { backgroundColor: row.tint.bg },
+                  ]}
+                >
+                  <row.Icon size={17} color={row.tint.icon} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <AppText size={11.5} color={colors.textMuted}>
+                    {row.label}
+                  </AppText>
+                  <AppText
+                    size={14}
+                    weight="bold"
+                    color={colors.text}
+                    style={{ marginTop: 1 }}
+                  >
+                    {row.value}
+                  </AppText>
+                </View>
+              </View>
+            ))}
           </View>
         )}
 
@@ -683,16 +654,23 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.becomeDriverCard,
-            { backgroundColor: colors.surface, borderColor: colors.primary },
+            { backgroundColor: PASTELS.lavender.bg },
           ]}
           onPress={() => router.push("/(features)/become_driver")}
+          activeOpacity={0.85}
         >
-          <AppText size={16} weight="bold" color={colors.primary}>
-            Become a Driver
-          </AppText>
-          <AppText size={13} color={colors.textMuted} style={{ marginTop: 4 }}>
-            Start earning by offering rides and deliveries
-          </AppText>
+          <View style={[styles.driverIconBox, { backgroundColor: "#FFFFFF" }]}>
+            <Car size={20} color={PASTELS.lavender.icon} />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <AppText size={15} weight="bold" color="#3B0764">
+              Become a Driver
+            </AppText>
+            <AppText size={12.5} color="#6B21A8" style={{ marginTop: 2 }}>
+              Start earning by offering rides and deliveries
+            </AppText>
+          </View>
+          <ChevronRight size={18} color="#6B21A8" />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -717,7 +695,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingVertical: 12,
   },
   backBoxCircle: {
@@ -728,14 +706,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   scrollBodyContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 40,
+  },
+  identityHeroCard: {
+    borderRadius: 24,
+    alignItems: "center",
+    paddingVertical: 24,
+    marginBottom: 16,
   },
   avatarCenteredBlockAnchor: {
     alignSelf: "center",
     position: "relative",
-    marginBottom: 32,
+    marginBottom: 4,
   },
   userMainProfileAvatarFrame: {
     width: 90,
@@ -753,48 +737,72 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 2,
   },
-  readOnlyFieldBlockRow: {
+  infoListCard: {
+    borderRadius: 24,
+    marginBottom: 16,
+    paddingHorizontal: 14,
+  },
+  infoRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 14,
     borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
   },
-  bottomEditActionActivationBtn: {
-    height: 48,
-    borderRadius: 24,
+  infoIconChip: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 32,
+  },
+  becomeDriverCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 20,
+  },
+  driverIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bottomEditActionActivationBtn: {
+    height: 52,
+    borderRadius: 999,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 4,
   },
   fieldLabelSpacing: { marginTop: 14, marginBottom: 6, paddingLeft: 4 },
+  formCard: {
+    borderRadius: 24,
+    padding: 18,
+    marginTop: 8,
+  },
   profileInputFrameField: {
-    height: 46,
-    borderRadius: 8,
+    height: 48,
+    borderRadius: 14,
     paddingHorizontal: 14,
     fontSize: 14,
   },
   genderGrid: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 4,
   },
   genderOption: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
-    borderWidth: 1,
   },
   closeModalBtn: {
     padding: 20,
     alignItems: "center",
     backgroundColor: "#111",
-  },
-  becomeDriverCard: {
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    marginVertical: 20,
   },
 });

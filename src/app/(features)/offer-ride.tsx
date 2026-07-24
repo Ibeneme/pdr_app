@@ -10,6 +10,7 @@ import {
   Modal,
   Dimensions,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -18,6 +19,17 @@ import { AppDispatch } from "@/api/store";
 import { createRide } from "@/api/slices/ride.slice";
 import { AppText } from "@/components/AppText";
 import { NigeriaCitiesGrid } from "@/components/NigeriaCitiesGrid";
+import {
+  ArrowLeft,
+  MapPin,
+  Flag,
+  Clock,
+  Users,
+  Banknote,
+  FileText,
+  CheckCircle,
+  XCircle,
+} from "lucide-react-native";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -42,10 +54,25 @@ const HOURS = [
 const MINUTES = ["00", "15", "30", "45"];
 const PERIODS = ["AM", "PM"];
 
+// Soft pastel chip palette, one tint per field, matching the reference mood
+// board's colored icon squares.
+const PASTELS = {
+  sky: { bg: "#DBEAFE", icon: "#2563EB" },
+  lavender: { bg: "#EDE9FE", icon: "#7C3AED" },
+  mint: { bg: "#D1FAE5", icon: "#059669" },
+  peach: { bg: "#FFE4D6", icon: "#EA580C" },
+  butter: { bg: "#FEF3C7", icon: "#D97706" },
+  rose: { bg: "#FFE1E6", icon: "#E11D48" },
+};
+
 export default function OfferRideScreen() {
   const { theme: colors, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
+
+  const pageBg = isDark ? colors.background : "#f4f4f";
+  const cardBg = isDark ? colors.surface : "#FFFFFF";
+  const tileBg = isDark ? colors.background : "#F4F4F1";
 
   // ==================== LOCAL STATE ====================
   const [isLoading, setIsLoading] = useState(false);
@@ -154,35 +181,21 @@ export default function OfferRideScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-
+    <View style={[styles.container, { backgroundColor: pageBg }]}>
+    
       {/* HEADER */}
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
+      <SafeAreaView style={styles.headerSafeArea}>
         <View style={styles.headerRow}>
           <TouchableOpacity
-            style={[
-              styles.iconButton,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-              },
-            ]}
+            style={[styles.circleButton, { backgroundColor: cardBg }]}
             onPress={() => router.back()}
           >
-            <AppText size={14} weight="bold" color={colors.text}>
-              Back
-            </AppText>
+            <ArrowLeft size={19} color={colors.text} />
           </TouchableOpacity>
-          <AppText size={18} weight="bold" color={colors.text}>
+          <AppText size={17} weight="bold" color={colors.text}>
             Offer a Ride
           </AppText>
-          <View style={{ width: 44 }} />
+          <View style={{ width: 40 }} />
         </View>
       </SafeAreaView>
 
@@ -218,16 +231,21 @@ export default function OfferRideScreen() {
             PICKUP LOCATION
           </AppText>
           <TouchableOpacity
-            style={[
-              styles.inputFieldBoxContainer,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
+            style={[styles.inputFieldBoxContainer, { backgroundColor: cardBg }]}
             onPress={() => openLocationSelection("PICKUP")}
           >
+            <View
+              style={[
+                styles.fieldIconChip,
+                { backgroundColor: PASTELS.sky.bg },
+              ]}
+            >
+              <MapPin size={16} color={PASTELS.sky.icon} />
+            </View>
             <AppText
               size={15}
               color={pickupPoint ? colors.text : colors.textMuted}
-              style={{ flex: 1 }}
+              style={{ flex: 1, marginLeft: 12 }}
             >
               {pickupPoint || "Choose dynamic city hub"}
             </AppText>
@@ -248,16 +266,21 @@ export default function OfferRideScreen() {
             DROPOFF LOCATION
           </AppText>
           <TouchableOpacity
-            style={[
-              styles.inputFieldBoxContainer,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
+            style={[styles.inputFieldBoxContainer, { backgroundColor: cardBg }]}
             onPress={() => openLocationSelection("DROPOFF")}
           >
+            <View
+              style={[
+                styles.fieldIconChip,
+                { backgroundColor: PASTELS.rose.bg },
+              ]}
+            >
+              <Flag size={16} color={PASTELS.rose.icon} />
+            </View>
             <AppText
               size={15}
               color={dropoffPoint ? colors.text : colors.textMuted}
-              style={{ flex: 1 }}
+              style={{ flex: 1, marginLeft: 12 }}
             >
               {dropoffPoint || "Choose dynamic city hub"}
             </AppText>
@@ -281,11 +304,19 @@ export default function OfferRideScreen() {
             <TouchableOpacity
               style={[
                 styles.inputFieldBoxContainer,
-                { backgroundColor: colors.surface, borderColor: colors.border },
+                { backgroundColor: cardBg },
               ]}
               onPress={() => setTimePickerVisible(true)}
             >
-              <AppText size={15} color={colors.text}>
+              <View
+                style={[
+                  styles.fieldIconChip,
+                  { backgroundColor: PASTELS.lavender.bg },
+                ]}
+              >
+                <Clock size={16} color={PASTELS.lavender.icon} />
+              </View>
+              <AppText size={14} color={colors.text} style={{ marginLeft: 10 }}>
                 {formattedDepartureTime}
               </AppText>
             </TouchableOpacity>
@@ -303,13 +334,24 @@ export default function OfferRideScreen() {
             <View
               style={[
                 styles.inputFieldBoxContainer,
-                { backgroundColor: colors.surface, borderColor: colors.border },
+                { backgroundColor: cardBg },
               ]}
             >
+              <View
+                style={[
+                  styles.fieldIconChip,
+                  { backgroundColor: PASTELS.mint.bg },
+                ]}
+              >
+                <Users size={16} color={PASTELS.mint.icon} />
+              </View>
               <TextInput
                 keyboardType="numeric"
                 placeholderTextColor={colors.textMuted}
-                style={[styles.textInputCore, { color: colors.text }]}
+                style={[
+                  styles.textInputCore,
+                  { color: colors.text, marginLeft: 10 },
+                ]}
                 value={availableSeats}
                 onChangeText={setAvailableSeats}
               />
@@ -328,16 +370,24 @@ export default function OfferRideScreen() {
             FARE PER PASSENGER (₦)
           </AppText>
           <View
-            style={[
-              styles.inputFieldBoxContainer,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
+            style={[styles.inputFieldBoxContainer, { backgroundColor: cardBg }]}
           >
+            <View
+              style={[
+                styles.fieldIconChip,
+                { backgroundColor: PASTELS.butter.bg },
+              ]}
+            >
+              <Banknote size={16} color={PASTELS.butter.icon} />
+            </View>
             <TextInput
               keyboardType="numeric"
               placeholder="Example: 2500"
               placeholderTextColor={colors.textMuted}
-              style={[styles.textInputCore, { color: colors.text }]}
+              style={[
+                styles.textInputCore,
+                { color: colors.text, marginLeft: 12 },
+              ]}
               value={estimatedFare}
               onChangeText={setEstimatedFare}
             />
@@ -357,9 +407,17 @@ export default function OfferRideScreen() {
           <View
             style={[
               styles.notesFieldInputBoxContainer,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              { backgroundColor: cardBg },
             ]}
           >
+            <View
+              style={[
+                styles.fieldIconChip,
+                { backgroundColor: PASTELS.peach.bg, marginTop: 12 },
+              ]}
+            >
+              <FileText size={16} color={PASTELS.peach.icon} />
+            </View>
             <TextInput
               placeholder="E.g., No heavy boxes, AC is fully operational..."
               placeholderTextColor={colors.textMuted}
@@ -368,7 +426,7 @@ export default function OfferRideScreen() {
               textAlignVertical="top"
               style={[
                 styles.textInputCore,
-                { color: colors.text, paddingTop: 12 },
+                { color: colors.text, paddingTop: 12, marginLeft: 12 },
               ]}
               value={notes}
               onChangeText={setNotes}
@@ -380,7 +438,7 @@ export default function OfferRideScreen() {
         <TouchableOpacity
           style={[
             styles.primaryActionFormSubmitBtn,
-            { backgroundColor: colors.primary },
+            { backgroundColor: colors.primary, marginBottom: 64 },
           ]}
           onPress={validateAndOpenOverview}
           disabled={isLoading}
@@ -393,7 +451,7 @@ export default function OfferRideScreen() {
 
       {/* ====================== EXCLUSIVE CITIES SELECTION MODAL ====================== */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent
         visible={locationTargetType !== null}
         onRequestClose={() => setLocationTargetType(null)}
@@ -402,7 +460,7 @@ export default function OfferRideScreen() {
           <View
             style={[
               styles.bottomSheetPresentationFrame,
-              { backgroundColor: colors.surface },
+              { backgroundColor: cardBg },
             ]}
           >
             <AppText
@@ -442,7 +500,7 @@ export default function OfferRideScreen() {
               <TouchableOpacity
                 style={[
                   styles.dismissActionPillControl,
-                  { backgroundColor: colors.border },
+                  { backgroundColor: tileBg, marginBottom: 64 },
                 ]}
                 onPress={() => setLocationTargetType(null)}
               >
@@ -466,7 +524,7 @@ export default function OfferRideScreen() {
           <View
             style={[
               styles.timePickerSpinnerCardBox,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              { backgroundColor: cardBg },
             ]}
           >
             <AppText
@@ -488,7 +546,7 @@ export default function OfferRideScreen() {
                     style={[
                       styles.wheelSelectionCellRow,
                       selectedHour === h && {
-                        backgroundColor: colors.primary + "20",
+                        backgroundColor: PASTELS.lavender.bg,
                       },
                     ]}
                     onPress={() => setSelectedHour(h)}
@@ -496,7 +554,9 @@ export default function OfferRideScreen() {
                     <AppText
                       size={17}
                       weight={selectedHour === h ? "bold" : "medium"}
-                      color={selectedHour === h ? colors.primary : colors.text}
+                      color={
+                        selectedHour === h ? PASTELS.lavender.icon : colors.text
+                      }
                     >
                       {h}
                     </AppText>
@@ -513,7 +573,7 @@ export default function OfferRideScreen() {
                     style={[
                       styles.wheelSelectionCellRow,
                       selectedMinute === m && {
-                        backgroundColor: colors.primary + "20",
+                        backgroundColor: PASTELS.lavender.bg,
                       },
                     ]}
                     onPress={() => setSelectedMinute(m)}
@@ -522,7 +582,9 @@ export default function OfferRideScreen() {
                       size={17}
                       weight={selectedMinute === m ? "bold" : "medium"}
                       color={
-                        selectedMinute === m ? colors.primary : colors.text
+                        selectedMinute === m
+                          ? PASTELS.lavender.icon
+                          : colors.text
                       }
                     >
                       {m}
@@ -537,7 +599,7 @@ export default function OfferRideScreen() {
                     style={[
                       styles.wheelSelectionCellRow,
                       selectedPeriod === p && {
-                        backgroundColor: colors.primary + "20",
+                        backgroundColor: PASTELS.lavender.bg,
                       },
                       { height: 50 },
                     ]}
@@ -547,7 +609,9 @@ export default function OfferRideScreen() {
                       size={17}
                       weight={selectedPeriod === p ? "bold" : "medium"}
                       color={
-                        selectedPeriod === p ? colors.primary : colors.text
+                        selectedPeriod === p
+                          ? PASTELS.lavender.icon
+                          : colors.text
                       }
                     >
                       {p}
@@ -582,7 +646,7 @@ export default function OfferRideScreen() {
           <View
             style={[
               styles.bottomSheetPresentationFrame,
-              { backgroundColor: colors.surface },
+              { backgroundColor: cardBg },
             ]}
           >
             <View style={{ paddingHorizontal: 24 }}>
@@ -599,10 +663,7 @@ export default function OfferRideScreen() {
               <View
                 style={[
                   styles.overviewDataSheetWrapper,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                  },
+                  { backgroundColor: tileBg },
                 ]}
               >
                 <View style={styles.overviewDataMetricRowItem}>
@@ -672,7 +733,7 @@ export default function OfferRideScreen() {
               <TouchableOpacity
                 style={[
                   styles.actionModalGridHalfBtn,
-                  { borderColor: colors.border, borderWidth: 1 },
+                  { backgroundColor: tileBg },
                 ]}
                 onPress={() => setOverviewModalVisible(false)}
               >
@@ -713,16 +774,21 @@ export default function OfferRideScreen() {
             style={[
               styles.bottomSheetPresentationFrame,
               {
-                backgroundColor: colors.surface,
+                backgroundColor: cardBg,
                 alignItems: "center",
                 paddingVertical: 40,
                 paddingHorizontal: 24,
               },
             ]}
           >
-            <AppText size={50} color="#22C55E">
-              ✓
-            </AppText>
+            <View
+              style={[
+                styles.resultIconCircle,
+                { backgroundColor: PASTELS.mint.bg },
+              ]}
+            >
+              <CheckCircle size={40} color={PASTELS.mint.icon} />
+            </View>
             <AppText
               size={20}
               weight="bold"
@@ -741,7 +807,7 @@ export default function OfferRideScreen() {
             <TouchableOpacity
               style={[
                 styles.primaryActionFormSubmitBtn,
-                { backgroundColor: colors.text, width: "100%" },
+                { backgroundColor: colors.primary, width: "100%" },
               ]}
               onPress={() => {
                 setSuccessModalVisible(false);
@@ -749,7 +815,7 @@ export default function OfferRideScreen() {
                 router.back();
               }}
             >
-              <AppText size={16} weight="bold" color={colors.background}>
+              <AppText size={16} weight="bold" color="#FFF">
                 Go Back Home
               </AppText>
             </TouchableOpacity>
@@ -769,16 +835,21 @@ export default function OfferRideScreen() {
             style={[
               styles.bottomSheetPresentationFrame,
               {
-                backgroundColor: colors.surface,
+                backgroundColor: cardBg,
                 alignItems: "center",
                 paddingVertical: 40,
                 paddingHorizontal: 24,
               },
             ]}
           >
-            <AppText size={50} color="#EF4444">
-              ✕
-            </AppText>
+            <View
+              style={[
+                styles.resultIconCircle,
+                { backgroundColor: PASTELS.rose.bg },
+              ]}
+            >
+              <XCircle size={40} color={PASTELS.rose.icon} />
+            </View>
             <AppText
               size={20}
               weight="bold"
@@ -797,7 +868,7 @@ export default function OfferRideScreen() {
             <TouchableOpacity
               style={[
                 styles.primaryActionFormSubmitBtn,
-                { backgroundColor: "#EF4444", width: "100%" },
+                { backgroundColor: PASTELS.rose.icon, width: "100%" },
               ]}
               onPress={() => setErrorModalVisible(false)}
             >
@@ -814,53 +885,61 @@ export default function OfferRideScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerSafeArea: { borderBottomWidth: 1 },
+  headerSafeArea: {
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
+  },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  iconButton: {
+  circleButton: {
+    width: 40,
     height: 40,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
   },
   scrollView: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 80 },
+  scrollContent: { padding: 16, paddingBottom: 80 },
   inputGroupFieldWrapper: { marginBottom: 20 },
-  inputLabelHint: { marginBottom: 6, letterSpacing: 0.5 },
+  inputLabelHint: { marginBottom: 6, letterSpacing: 0.5, paddingHorizontal: 2 },
   inputFieldBoxContainer: {
-    height: 54,
-    borderRadius: 14,
-    borderWidth: 1.5,
+    height: 58,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
   },
   notesFieldInputBoxContainer: {
-    height: 90,
-    borderRadius: 14,
-    borderWidth: 1.5,
+    minHeight: 96,
+    borderRadius: 16,
     flexDirection: "row",
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
   },
-  textInputCore: { flex: 1, fontSize: 16 },
+  fieldIconChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  textInputCore: { flex: 1, fontSize: 15 },
   twoColumnInputsGridLayout: { flexDirection: "row", gap: 12 },
   primaryActionFormSubmitBtn: {
     height: 56,
-    borderRadius: 16,
+    borderRadius: 999,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 16,
+    marginBottom: 78
   },
   darkBlurBackdropOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
   },
   bottomSheetPresentationFrame: {
@@ -877,7 +956,6 @@ const styles = StyleSheet.create({
   timePickerSpinnerCardBox: {
     width: "88%",
     borderRadius: 24,
-    borderWidth: 1,
     padding: 20,
     alignSelf: "center",
   },
@@ -892,13 +970,12 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: 12,
     marginVertical: 2,
   },
   overviewDataSheetWrapper: {
     padding: 18,
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 20,
     gap: 14,
     marginVertical: 16,
   },
@@ -916,19 +993,27 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 24,
     paddingBottom: 24,
+    marginBottom: 78
   },
   actionModalGridHalfBtn: {
     flex: 1,
     height: 52,
-    borderRadius: 14,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
   },
   dismissActionPillControl: {
     height: 48,
-    borderRadius: 12,
+    borderRadius: 999,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 16,
+  },
+  resultIconCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

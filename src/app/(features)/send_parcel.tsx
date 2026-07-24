@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import {
   StyleSheet,
-  Text,
   View,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
   SafeAreaView,
   TextInput,
   Switch,
@@ -22,20 +21,48 @@ import DateTimePicker, {
 } from "@react-native-community/datetimepicker";
 import { createParcelRequest } from "@/api/slices/parcel.request.slice";
 import { AppDispatch } from "@/api/store";
+import { AppText } from "@/components/AppText";
+import {
+  ArrowLeft,
+  Calendar,
+  Clock,
+  MapPin,
+  Flag,
+  PackageOpen,
+  Wine,
+  Banknote,
+  CheckCircle,
+  XCircle,
+} from "lucide-react-native";
 import { NigeriaCitiesGrid } from "@/components/NigeriaCitiesGrid";
+
+// ---- Shared design tokens -------------------------------------------------
+const RADIUS = { sm: 12, md: 16, lg: 20, xl: 24, pill: 999 };
+const SHADOW_SM = {};
+const SHADOW_MD = {};
+
+const PASTELS = {
+  sky: { bg: "#DBEAFE", icon: "#2563EB" },
+  lavender: { bg: "#EDE9FE", icon: "#7C3AED" },
+  mint: { bg: "#D1FAE5", icon: "#059669" },
+  peach: { bg: "#FFE4D6", icon: "#EA580C" },
+  butter: { bg: "#FEF3C7", icon: "#D97706" },
+  rose: { bg: "#FFE1E6", icon: "#E11D48" },
+};
+// ---------------------------------------------------------------------------
 
 export default function SendParcelScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
 
-  // ==========================================
-  // FORM & PACKAGING STATE
-  // ==========================================
+  const pageBg = isDark ? theme.background : "#f4f4f4";
+  const cardBg = isDark ? theme.surface : "#FFFFFF";
+  const tileBg = isDark ? theme.background : "#F4F4F1";
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Both pickup and destination are mapped to structural hub names chosen from the grid component
   const [pickupAddress, setPickupAddress] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
 
@@ -45,72 +72,65 @@ export default function SendParcelScreen() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
 
-  // ==========================================
-  // TEMPORAL LOGISTICS WINDOWS
-  // ==========================================
   const [dispatchDateStart, setDispatchDateStart] = useState(new Date());
   const [dispatchDateEnd, setDispatchDateEnd] = useState(new Date());
   const [availabilityStart, setAvailabilityStart] = useState(new Date());
   const [availabilityEnd, setAvailabilityEnd] = useState(new Date());
 
-  // Picker visibility toggles
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  // Modal states
+  const [showStartDateModal, setShowStartDateModal] = useState(false);
+  const [showEndDateModal, setShowEndDateModal] = useState(false);
+  const [showStartTimeModal, setShowStartTimeModal] = useState(false);
+  const [showEndTimeModal, setShowEndTimeModal] = useState(false);
 
-  // ==========================================
-  // MODAL CONTEXT SWITCHERS
-  // ==========================================
-  // Tracks which input field targeted the geographic selector layout context
+  const [tempDate, setTempDate] = useState(new Date());
+  const [tempTime, setTempTime] = useState(new Date());
+
   const [locationSelectionTarget, setLocationSelectionTarget] = useState<
     "PICKUP" | "DESTINATION" | null
   >(null);
-
   const [overviewModalVisible, setOverviewModalVisible] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState<
     "idle" | "success" | "error"
   >("idle");
 
-  // ==========================================
-  // DATETIME EVENT HANDLERS
-  // ==========================================
-  const onDateChange = (
-    type: "start" | "end",
-    event: DateTimePickerEvent,
-    selectedDate?: Date
-  ) => {
-    // Android dismisses immediately on spinner action; iOS requires explicit confirmation interaction
-    if (Platform.OS !== "ios") {
-      if (type === "start") setShowStartDatePicker(false);
-      else setShowEndDatePicker(false);
-    }
-    if (selectedDate) {
-      if (type === "start") setDispatchDateStart(selectedDate);
-      else setDispatchDateEnd(selectedDate);
+  const openDateModal = (type: "start" | "end") => {
+    if (type === "start") {
+      setTempDate(dispatchDateStart);
+      setShowStartDateModal(true);
+    } else {
+      setTempDate(dispatchDateEnd);
+      setShowEndDateModal(true);
     }
   };
 
-  const onTimeChange = (
-    type: "start" | "end",
-    event: DateTimePickerEvent,
-    selectedDate?: Date
-  ) => {
-    if (Platform.OS !== "ios") {
-      if (type === "start") setShowStartTimePicker(false);
-      else setShowEndTimePicker(false);
-    }
-    if (selectedDate) {
-      if (type === "start") setAvailabilityStart(selectedDate);
-      else setAvailabilityEnd(selectedDate);
+  const openTimeModal = (type: "start" | "end") => {
+    if (type === "start") {
+      setTempTime(availabilityStart);
+      setShowStartTimeModal(true);
+    } else {
+      setTempTime(availabilityEnd);
+      setShowEndTimeModal(true);
     }
   };
 
-  // ==========================================
-  // VALIDATION & DISPATCH PIPELINE
-  // ==========================================
+  const confirmDate = (type: "start" | "end") => {
+    if (type === "start") setDispatchDateStart(tempDate);
+    else setDispatchDateEnd(tempDate);
+
+    setShowStartDateModal(false);
+    setShowEndDateModal(false);
+  };
+
+  const confirmTime = (type: "start" | "end") => {
+    if (type === "start") setAvailabilityStart(tempTime);
+    else setAvailabilityEnd(tempTime);
+
+    setShowStartTimeModal(false);
+    setShowEndTimeModal(false);
+  };
+
   const handleOpenOverview = () => {
-    // Absolute field coverage gating prior to rendering summary parameters
     if (
       !pickupAddress.trim() ||
       !selectedCity.trim() ||
@@ -129,9 +149,6 @@ export default function SendParcelScreen() {
   };
 
   const handleConfirmSubmit = async () => {
-    console.log("🚀 [SUBMIT STARTED] handleConfirmSubmit called");
-
-    // Map structural component primitives into the core API schema architecture
     const requestPayload = {
       pickupAddress: pickupAddress.trim(),
       destinationCity: selectedCity,
@@ -160,7 +177,6 @@ export default function SendParcelScreen() {
 
     try {
       const result = await dispatch(createParcelRequest(requestPayload));
-      // Intercept and assert status utilizing Thunk action matchers
       if (createParcelRequest.fulfilled.match(result)) {
         setSubmissionStatus("success");
       } else {
@@ -168,7 +184,6 @@ export default function SendParcelScreen() {
         setError("Failed to post your request. Please try again.");
       }
     } catch (err: any) {
-      console.error("💥 [SUBMIT ERROR]", err);
       setSubmissionStatus("error");
       setError("Something went wrong. Please try again.");
     } finally {
@@ -176,7 +191,6 @@ export default function SendParcelScreen() {
     }
   };
 
-  // Assign chosen hub back to the correct form state variable depending on intent
   const selectHubValue = (hubName: string) => {
     if (locationSelectionTarget === "PICKUP") {
       setPickupAddress(hubName);
@@ -187,129 +201,152 @@ export default function SendParcelScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: pageBg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* HEADER SECTION */}
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          { backgroundColor: theme.surface, borderBottomColor: theme.border },
-        ]}
-      >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[
-              styles.backButton,
-              { backgroundColor: theme.background, borderColor: theme.border },
-            ]}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.backText, { color: theme.text }]}>←</Text>
-          </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.headerWrap}>
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={[styles.backButton, { backgroundColor: cardBg }]}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={19} color={theme.text} />
+            </TouchableOpacity>
 
-          <Text style={[styles.brandText, { color: theme.text }]}>
-            Deliver a Parcel
-          </Text>
+            <AppText size={17} weight="bold" color={theme.text}>
+              Deliver a Parcel
+            </AppText>
 
-          <View style={{ width: 42 }} />
-        </View>
-      </SafeAreaView>
+            <View style={{ width: 38 }} />
+          </View>
+        </SafeAreaView>
+      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.flex}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+        style={styles.keyboardContainer}
       >
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          style={styles.mainScrollView}
+          contentContainerStyle={styles.scrollContentLayout}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* PICKUP LOCATION SELECTION FIELD */}
-          <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>
+          {/* PICKUP */}
+          <AppText
+            size={11}
+            weight="bold"
+            color={theme.textMuted}
+            style={styles.sectionTitle}
+          >
             PICKUP LOCATION
-          </Text>
-
+          </AppText>
           <TouchableOpacity
-            activeOpacity={0.7}
-            style={[
-              styles.clickableInputContainer,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
+            activeOpacity={0.75}
+            style={[styles.inputCard, { backgroundColor: cardBg }, SHADOW_SM]}
             onPress={() => setLocationSelectionTarget("PICKUP")}
           >
-            <Text
-              numberOfLines={1}
+            <View
               style={[
-                styles.selectTextLabel,
-                { color: pickupAddress ? theme.text : theme.textMuted },
+                styles.fieldIconChip,
+                { backgroundColor: PASTELS.sky.bg },
               ]}
+            >
+              <MapPin size={16} color={PASTELS.sky.icon} />
+            </View>
+            <AppText
+              size={15}
+              color={pickupAddress ? theme.text : theme.textMuted}
+              style={{ flex: 1, marginLeft: 12 }}
             >
               {pickupAddress || "Select pickup terminal hub..."}
-            </Text>
-            <Text
-              style={{ fontSize: 13, color: theme.primary, fontWeight: "bold" }}
-            >
-              Choose
-            </Text>
-          </TouchableOpacity>
-
-          {/* DESTINATION LOCATION SELECTION FIELD */}
-          <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>
-            DESTINATION HUB
-          </Text>
-
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={[
-              styles.clickableInputContainer,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-            onPress={() => setLocationSelectionTarget("DESTINATION")}
-          >
-            <Text
-              numberOfLines={1}
+            </AppText>
+            <View
               style={[
-                styles.selectTextLabel,
-                { color: selectedCity ? theme.text : theme.textMuted },
+                styles.choosePill,
+                { backgroundColor: `${theme.primary}16` },
               ]}
             >
-              {selectedCity || "Select target destination city center..."}
-            </Text>
-            <Text
-              style={{ fontSize: 13, color: theme.primary, fontWeight: "bold" }}
-            >
-              Choose
-            </Text>
+              <AppText size={12} weight="bold" color={theme.primary}>
+                Choose
+              </AppText>
+            </View>
           </TouchableOpacity>
 
-          {/* SPECIAL HANDLING MODES */}
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 14 },
-            ]}
+          {/* DESTINATION */}
+          <AppText
+            size={11}
+            weight="bold"
+            color={theme.textMuted}
+            style={styles.sectionTitle}
+          >
+            DESTINATION HUB
+          </AppText>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={[styles.inputCard, { backgroundColor: cardBg }, SHADOW_SM]}
+            onPress={() => setLocationSelectionTarget("DESTINATION")}
+          >
+            <View
+              style={[
+                styles.fieldIconChip,
+                { backgroundColor: PASTELS.rose.bg },
+              ]}
+            >
+              <Flag size={16} color={PASTELS.rose.icon} />
+            </View>
+            <AppText
+              size={15}
+              color={selectedCity ? theme.text : theme.textMuted}
+              style={{ flex: 1, marginLeft: 12 }}
+            >
+              {selectedCity || "Select target destination city center..."}
+            </AppText>
+            <View
+              style={[
+                styles.choosePill,
+                { backgroundColor: `${theme.primary}16` },
+              ]}
+            >
+              <AppText size={12} weight="bold" color={theme.primary}>
+                Choose
+              </AppText>
+            </View>
+          </TouchableOpacity>
+
+          {/* SPECIAL HANDLING */}
+          <AppText
+            size={11}
+            weight="bold"
+            color={theme.textMuted}
+            style={styles.sectionTitle}
           >
             SPECIAL HANDLING
-          </Text>
-
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-          >
+          </AppText>
+          <View style={[styles.card, { backgroundColor: cardBg }, SHADOW_SM]}>
             <View style={styles.toggleRow}>
-              <View style={styles.toggleLabel}>
-                <Text style={[styles.toggleTitle, { color: theme.text }]}>
+              <View
+                style={[
+                  styles.fieldIconChip,
+                  { backgroundColor: PASTELS.peach.bg },
+                ]}
+              >
+                <PackageOpen size={16} color={PASTELS.peach.icon} />
+              </View>
+              <View style={[styles.toggleLabel, { marginLeft: 12 }]}>
+                <AppText size={16} weight="bold" color={theme.text}>
                   Perishable Goods
-                </Text>
-                <Text style={[styles.toggleDesc, { color: theme.textMuted }]}>
+                </AppText>
+                <AppText
+                  size={13}
+                  color={theme.textMuted}
+                  style={{ marginTop: 2 }}
+                >
                   Spoils easily or time-sensitive
-                </Text>
+                </AppText>
               </View>
               <Switch
                 value={isPerishable}
@@ -322,13 +359,25 @@ export default function SendParcelScreen() {
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
             <View style={styles.toggleRow}>
-              <View style={styles.toggleLabel}>
-                <Text style={[styles.toggleTitle, { color: theme.text }]}>
+              <View
+                style={[
+                  styles.fieldIconChip,
+                  { backgroundColor: PASTELS.lavender.bg },
+                ]}
+              >
+                <Wine size={16} color={PASTELS.lavender.icon} />
+              </View>
+              <View style={[styles.toggleLabel, { marginLeft: 12 }]}>
+                <AppText size={16} weight="bold" color={theme.text}>
                   Fragile Items
-                </Text>
-                <Text style={[styles.toggleDesc, { color: theme.textMuted }]}>
+                </AppText>
+                <AppText
+                  size={13}
+                  color={theme.textMuted}
+                  style={{ marginTop: 2 }}
+                >
                   Requires gentle handling
-                </Text>
+                </AppText>
               </View>
               <Switch
                 value={isFragile}
@@ -339,174 +388,157 @@ export default function SendParcelScreen() {
             </View>
           </View>
 
-          {/* DISPATCH TARGET DATE SELECTION GRID */}
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 14 },
-            ]}
+          {/* DISPATCH WINDOW */}
+          <AppText
+            size={11}
+            weight="bold"
+            color={theme.textMuted}
+            style={styles.sectionTitle}
           >
             DISPATCH DATE WINDOW
-          </Text>
-
+          </AppText>
           <View style={styles.row}>
             <TouchableOpacity
+              activeOpacity={0.75}
               style={[
                 styles.dateButton,
-                { backgroundColor: theme.surface, borderColor: theme.border },
+                { backgroundColor: cardBg },
+                SHADOW_SM,
               ]}
-              onPress={() => setShowStartDatePicker(true)}
+              onPress={() => openDateModal("start")}
             >
-              <Text style={[styles.dateText, { color: theme.text }]}>
+              <View
+                style={[
+                  styles.smallIconChip,
+                  { backgroundColor: PASTELS.butter.bg },
+                ]}
+              >
+                <Calendar size={15} color={PASTELS.butter.icon} />
+              </View>
+              <AppText size={13.5} color={theme.text} style={{ marginLeft: 8 }}>
                 Start: {dispatchDateStart.toLocaleDateString()}
-              </Text>
+              </AppText>
             </TouchableOpacity>
 
             <TouchableOpacity
+              activeOpacity={0.75}
               style={[
                 styles.dateButton,
-                { backgroundColor: theme.surface, borderColor: theme.border },
+                { backgroundColor: cardBg },
+                SHADOW_SM,
               ]}
-              onPress={() => setShowEndDatePicker(true)}
+              onPress={() => openDateModal("end")}
             >
-              <Text style={[styles.dateText, { color: theme.text }]}>
+              <View
+                style={[
+                  styles.smallIconChip,
+                  { backgroundColor: PASTELS.butter.bg },
+                ]}
+              >
+                <Calendar size={15} color={PASTELS.butter.icon} />
+              </View>
+              <AppText size={13.5} color={theme.text} style={{ marginLeft: 8 }}>
                 End: {dispatchDateEnd.toLocaleDateString()}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           </View>
 
-          {showStartDatePicker && (
-            <View
-              style={[
-                styles.pickerContainer,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <DateTimePicker
-                value={dispatchDateStart}
-                mode="date"
-                display="spinner"
-                onChange={(e, d) => onDateChange("start", e, d)}
-                minimumDate={new Date()}
-              />
-            </View>
-          )}
-
-          {showEndDatePicker && (
-            <View
-              style={[
-                styles.pickerContainer,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <DateTimePicker
-                value={dispatchDateEnd}
-                mode="date"
-                display="spinner"
-                onChange={(e, d) => onDateChange("end", e, d)}
-                minimumDate={dispatchDateStart}
-              />
-            </View>
-          )}
-
-          {/* DAILY OPERATIONAL AVAILABILITY TIMEOFFS */}
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 14 },
-            ]}
+          {/* AVAILABILITY WINDOW */}
+          <AppText
+            size={11}
+            weight="bold"
+            color={theme.textMuted}
+            style={styles.sectionTitle}
           >
             RIDER AVAILABILITY WINDOW
-          </Text>
-
+          </AppText>
           <View style={styles.row}>
             <TouchableOpacity
+              activeOpacity={0.75}
               style={[
                 styles.dateButton,
-                { backgroundColor: theme.surface, borderColor: theme.border },
+                { backgroundColor: cardBg },
+                SHADOW_SM,
               ]}
-              onPress={() => setShowStartTimePicker(true)}
+              onPress={() => openTimeModal("start")}
             >
-              <Text style={[styles.dateText, { color: theme.text }]}>
+              <View
+                style={[
+                  styles.smallIconChip,
+                  { backgroundColor: PASTELS.mint.bg },
+                ]}
+              >
+                <Clock size={15} color={PASTELS.mint.icon} />
+              </View>
+              <AppText size={13.5} color={theme.text} style={{ marginLeft: 8 }}>
                 From:{" "}
                 {availabilityStart.toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
-              </Text>
+              </AppText>
             </TouchableOpacity>
 
             <TouchableOpacity
+              activeOpacity={0.75}
               style={[
                 styles.dateButton,
-                { backgroundColor: theme.surface, borderColor: theme.border },
+                { backgroundColor: cardBg },
+                SHADOW_SM,
               ]}
-              onPress={() => setShowEndTimePicker(true)}
+              onPress={() => openTimeModal("end")}
             >
-              <Text style={[styles.dateText, { color: theme.text }]}>
+              <View
+                style={[
+                  styles.smallIconChip,
+                  { backgroundColor: PASTELS.mint.bg },
+                ]}
+              >
+                <Clock size={15} color={PASTELS.mint.icon} />
+              </View>
+              <AppText size={13.5} color={theme.text} style={{ marginLeft: 8 }}>
                 To:{" "}
                 {availabilityEnd.toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           </View>
 
-          {showStartTimePicker && (
-            <View
-              style={[
-                styles.pickerContainer,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <DateTimePicker
-                value={availabilityStart}
-                mode="time"
-                display="spinner"
-                onChange={(e, d) => onTimeChange("start", e, d)}
-              />
-            </View>
-          )}
-
-          {showEndTimePicker && (
-            <View
-              style={[
-                styles.pickerContainer,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <DateTimePicker
-                value={availabilityEnd}
-                mode="time"
-                display="spinner"
-                onChange={(e, d) => onTimeChange("end", e, d)}
-              />
-            </View>
-          )}
-
-          {/* ECONOMIC PRICING RANGE MATRICES */}
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: theme.textMuted, marginTop: 14 },
-            ]}
+          {/* BUDGET */}
+          <AppText
+            size={11}
+            weight="bold"
+            color={theme.textMuted}
+            style={styles.sectionTitle}
           >
             BUDGET RANGE (₦)
-          </Text>
-
+          </AppText>
           <View style={styles.row}>
             <View
               style={[
                 styles.priceInput,
-                { backgroundColor: theme.surface, borderColor: theme.border },
+                { backgroundColor: cardBg },
+                SHADOW_SM,
               ]}
             >
+              <View
+                style={[
+                  styles.smallIconChip,
+                  { backgroundColor: PASTELS.mint.bg },
+                ]}
+              >
+                <Banknote size={15} color={PASTELS.mint.icon} />
+              </View>
               <TextInput
                 placeholder="Min"
                 placeholderTextColor={theme.textMuted}
                 keyboardType="numeric"
-                style={[styles.priceTextInput, { color: theme.text }]}
+                style={[
+                  styles.priceTextInput,
+                  { color: theme.text, marginLeft: 10 },
+                ]}
                 value={minPrice}
                 onChangeText={setMinPrice}
               />
@@ -515,80 +547,89 @@ export default function SendParcelScreen() {
             <View
               style={[
                 styles.priceInput,
-                { backgroundColor: theme.surface, borderColor: theme.border },
+                { backgroundColor: cardBg },
+                SHADOW_SM,
               ]}
             >
+              <View
+                style={[
+                  styles.smallIconChip,
+                  { backgroundColor: PASTELS.mint.bg },
+                ]}
+              >
+                <Banknote size={15} color={PASTELS.mint.icon} />
+              </View>
               <TextInput
                 placeholder="Max"
                 placeholderTextColor={theme.textMuted}
                 keyboardType="numeric"
-                style={[styles.priceTextInput, { color: theme.text }]}
+                style={[
+                  styles.priceTextInput,
+                  { color: theme.text, marginLeft: 10 },
+                ]}
                 value={maxPrice}
                 onChangeText={setMaxPrice}
               />
             </View>
           </View>
 
-          {/* TRIGGER PRIMARY PRE-FLIGHT VALIDATION CARD */}
           <TouchableOpacity
+            activeOpacity={0.85}
             style={[
               styles.primaryButton,
-              { backgroundColor: theme.primary, marginTop: 12 },
+              { backgroundColor: theme.primary, marginBottom: 78 },
+              SHADOW_MD,
             ]}
             onPress={handleOpenOverview}
-            activeOpacity={0.85}
           >
-            <Text style={styles.buttonText}>Review & Post Request</Text>
+            <AppText size={16} weight="bold" color="#fff">
+              Review & Post Request
+            </AppText>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ======================================================================
-          SUB-MODAL: NIGERIAN NATIONAL HUBS REGIONAL GEOGRAPHIC SELECTOR
-          ====================================================================== */}
+      {/* Location Selection Modal */}
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent
         visible={locationSelectionTarget !== null}
         onRequestClose={() => setLocationSelectionTarget(null)}
       >
         <View style={styles.modalOverlay}>
           <TouchableOpacity
-            style={styles.dismissArea}
-            activeOpacity={1}
+            style={styles.modalDismissArea}
             onPress={() => setLocationSelectionTarget(null)}
           />
           <View
             style={[
-             // styles.modalContent, // Fixed the commented style chunk selector here
-              { backgroundColor: theme.surface, paddingTop: 16, height: "82%" },
+              styles.modalContent,
+              { backgroundColor: cardBg, height: "82%" },
+              SHADOW_MD,
             ]}
           >
             <View
               style={[styles.modalKnob, { backgroundColor: theme.border }]}
             />
 
-            <Text
-              style={[
-                styles.modalTitle,
-                { color: theme.text, paddingHorizontal: 24, marginBottom: 4 },
-              ]}
+            <AppText
+              size={18}
+              weight="bold"
+              color={theme.text}
+              style={{ paddingHorizontal: 24 }}
             >
               Select{" "}
               {locationSelectionTarget === "PICKUP"
                 ? "Pickup Hub"
                 : "Destination Hub"}
-            </Text>
-            <Text
-              style={{
-                fontSize: 13,
-                color: theme.textMuted,
-                paddingHorizontal: 24,
-                marginBottom: 12,
-              }}
+            </AppText>
+            <AppText
+              size={13}
+              color={theme.textMuted}
+              style={{ paddingHorizontal: 24, marginBottom: 12 }}
             >
-              Choose across all national trade corridors and regional centers.
-            </Text>
+              Choose across all national trade corridors
+            </AppText>
 
             <View style={{ flex: 1 }}>
               <NigeriaCitiesGrid
@@ -598,29 +639,25 @@ export default function SendParcelScreen() {
 
             <View
               style={{
-                paddingHorizontal: 24,
+                padding: 24,
                 paddingBottom: Platform.OS === "ios" ? 34 : 20,
               }}
             >
               <TouchableOpacity
-                style={[
-                  styles.primaryButton,
-                  { backgroundColor: theme.border },
-                ]}
+                activeOpacity={0.8}
+                style={[styles.primaryButton, { backgroundColor: tileBg }]}
                 onPress={() => setLocationSelectionTarget(null)}
               >
-                <Text style={[styles.buttonText, { color: theme.text }]}>
+                <AppText size={16} weight="bold" color={theme.text}>
                   Cancel
-                </Text>
+                </AppText>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* ======================================================================
-          SUB-MODAL: TRANSACTION OVERVIEW SUMMARY & LOGISTICS ACKNOWLEDGEMENT
-          ====================================================================== */}
+      {/* Overview / Submission Modal */}
       <Modal
         animationType="slide"
         transparent
@@ -629,102 +666,152 @@ export default function SendParcelScreen() {
       >
         <View style={styles.modalOverlay}>
           <TouchableOpacity
-            style={styles.dismissArea}
+            style={styles.modalDismissArea}
             onPress={() => setOverviewModalVisible(false)}
           />
 
           <View
-            style={[styles.modalContent, { backgroundColor: theme.surface }]}
+            style={[
+              styles.modalContent,
+              { backgroundColor: cardBg },
+              SHADOW_MD,
+            ]}
           >
             <View
               style={[styles.modalKnob, { backgroundColor: theme.border }]}
             />
 
             {submissionStatus === "idle" && (
-              <>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>
+              <View style={{ paddingHorizontal: 24 }}>
+                <AppText size={19} weight="bold" color={theme.text}>
                   Order Summary
-                </Text>
-
-                <View
-                  style={[styles.summaryCard, { borderColor: theme.border }]}
+                </AppText>
+                <AppText
+                  size={13}
+                  color={theme.textMuted}
+                  style={{ marginTop: 2 }}
                 >
-                  <Text style={[styles.summaryText, { color: theme.text }]}>
-                    <Text style={{ color: theme.textMuted }}>Pickup:</Text>{" "}
-                    {pickupAddress}
-                  </Text>
-                  <Text style={[styles.summaryText, { color: theme.text }]}>
-                    <Text style={{ color: theme.textMuted }}>Destination:</Text>{" "}
-                    {selectedCity}
-                  </Text>
-                  <Text style={[styles.summaryText, { color: theme.text }]}>
-                    <Text style={{ color: theme.textMuted }}>Handling:</Text>{" "}
-                    {isPerishable ? "Perishable" : "Standard"} •{" "}
-                    {isFragile ? "Fragile" : "Normal"}
-                  </Text>
-                  <Text style={[styles.summaryText, { color: theme.text }]}>
-                    <Text style={{ color: theme.textMuted }}>Dates:</Text>{" "}
-                    {dispatchDateStart.toLocaleDateString()} —{" "}
-                    {dispatchDateEnd.toLocaleDateString()}
-                  </Text>
-                  <Text style={[styles.summaryText, { color: theme.text }]}>
-                    <Text style={{ color: theme.textMuted }}>Time:</Text>{" "}
-                    {availabilityStart.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}{" "}
-                    —{" "}
-                    {availabilityEnd.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </Text>
-                  <Text style={[styles.summaryText, { color: theme.text }]}>
-                    <Text style={{ color: theme.textMuted }}>Budget:</Text> ₦
-                    {minPrice} — ₦{maxPrice}
-                  </Text>
+                  Please check everything before posting
+                </AppText>
+
+                <View style={[styles.summaryCard, { backgroundColor: tileBg }]}>
+                  <View style={styles.summaryRow}>
+                    <AppText size={13} color={theme.textMuted}>
+                      Pickup
+                    </AppText>
+                    <AppText size={14} weight="semibold" color={theme.text}>
+                      {pickupAddress}
+                    </AppText>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <AppText size={13} color={theme.textMuted}>
+                      Destination
+                    </AppText>
+                    <AppText size={14} weight="semibold" color={theme.text}>
+                      {selectedCity}
+                    </AppText>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <AppText size={13} color={theme.textMuted}>
+                      Handling
+                    </AppText>
+                    <AppText size={14} weight="semibold" color={theme.text}>
+                      {isPerishable ? "Perishable" : "Standard"} •{" "}
+                      {isFragile ? "Fragile" : "Normal"}
+                    </AppText>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <AppText size={13} color={theme.textMuted}>
+                      Dates
+                    </AppText>
+                    <AppText size={14} weight="semibold" color={theme.text}>
+                      {dispatchDateStart.toLocaleDateString()} —{" "}
+                      {dispatchDateEnd.toLocaleDateString()}
+                    </AppText>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <AppText size={13} color={theme.textMuted}>
+                      Time
+                    </AppText>
+                    <AppText size={14} weight="semibold" color={theme.text}>
+                      {availabilityStart.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}{" "}
+                      —{" "}
+                      {availabilityEnd.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </AppText>
+                  </View>
+                  <View
+                    style={[
+                      styles.summaryRow,
+                      { borderBottomWidth: 0, paddingBottom: 0 },
+                    ]}
+                  >
+                    <AppText size={13} color={theme.textMuted}>
+                      Budget
+                    </AppText>
+                    <AppText size={17} weight="bold" color={theme.primary}>
+                      ₦{minPrice} — ₦{maxPrice}
+                    </AppText>
+                  </View>
                 </View>
 
                 <TouchableOpacity
+                  activeOpacity={0.85}
                   style={[
                     styles.primaryButton,
-                    { backgroundColor: theme.primary, marginTop: 16 },
+                    {
+                      backgroundColor: theme.primary,
+                      marginTop: 4,
+                      marginBottom: 78,
+                    },
+                    SHADOW_MD,
                   ]}
                   onPress={handleConfirmSubmit}
                   disabled={loading}
                 >
                   {loading ? (
-                    <ActivityIndicator color="#FFF" />
+                    <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.buttonText}>Confirm & Post</Text>
+                    <AppText size={16} weight="bold" color="#fff">
+                      Confirm & Post
+                    </AppText>
                   )}
                 </TouchableOpacity>
-              </>
+              </View>
             )}
 
-            {/* TRANSIENT COMPONENT POST SUCCESS TERMINATION CONTAINER */}
             {submissionStatus === "success" && (
               <View style={styles.centerContent}>
                 <View
                   style={[
                     styles.statusCircle,
-                    { backgroundColor: "#34C75920" },
+                    { backgroundColor: PASTELS.mint.bg },
                   ]}
                 >
-                  <Text style={{ color: "#34C759", fontSize: 40 }}>✓</Text>
+                  <CheckCircle size={40} color={PASTELS.mint.icon} />
                 </View>
-                <Text style={[styles.statusTitle, { color: theme.text }]}>
+                <AppText size={20} weight="bold" color={theme.text}>
                   Request Posted!
-                </Text>
-                <Text style={[styles.statusBody, { color: theme.textMuted }]}>
+                </AppText>
+                <AppText
+                  size={15}
+                  color={theme.textMuted}
+                  style={{ textAlign: "center", marginTop: 8 }}
+                >
                   Riders will see your parcel request shortly.
-                </Text>
+                </AppText>
                 <TouchableOpacity
+                  activeOpacity={0.85}
                   style={[
                     styles.primaryButton,
                     {
-                      backgroundColor: theme.text,
-                      marginTop: 24,
+                      backgroundColor: theme.primary,
+                      marginTop: 32,
                       width: "100%",
                     },
                   ]}
@@ -733,47 +820,210 @@ export default function SendParcelScreen() {
                     router.back();
                   }}
                 >
-                  <Text
-                    style={[styles.buttonText, { color: theme.background }]}
-                  >
+                  <AppText size={16} weight="bold" color="#fff">
                     Back to Home
-                  </Text>
+                  </AppText>
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* TRANSIENT COMPONENT NETWORK ERROR FALLBACKS */}
             {submissionStatus === "error" && (
               <View style={styles.centerContent}>
                 <View
                   style={[
                     styles.statusCircle,
-                    { backgroundColor: "#FF3B3020" },
+                    { backgroundColor: PASTELS.rose.bg },
                   ]}
                 >
-                  <Text style={{ color: "#FF3B30", fontSize: 40 }}>✕</Text>
+                  <XCircle size={40} color={PASTELS.rose.icon} />
                 </View>
-                <Text style={[styles.statusTitle, { color: theme.text }]}>
+                <AppText size={20} weight="bold" color={theme.text}>
                   Submission Failed
-                </Text>
-                <Text style={[styles.statusBody, { color: theme.textMuted }]}>
+                </AppText>
+                <AppText
+                  size={15}
+                  color={theme.textMuted}
+                  style={{ textAlign: "center", marginTop: 8 }}
+                >
                   {error}
-                </Text>
+                </AppText>
                 <TouchableOpacity
+                  activeOpacity={0.85}
                   style={[
                     styles.primaryButton,
                     {
-                      backgroundColor: "#FF3B30",
-                      marginTop: 24,
-                      width: "100%",
+                      backgroundColor: PASTELS.rose.icon,
+                      marginTop: 32,
+                      width: "90%",
                     },
                   ]}
                   onPress={() => setOverviewModalVisible(false)}
                 >
-                  <Text style={styles.buttonText}>Fix & Try Again</Text>
+                  <AppText size={16} weight="bold" color="#fff">
+                    Try Again
+                  </AppText>
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==================== DATE & TIME PICKER MODALS ==================== */}
+
+      {/* Start Date Modal */}
+      <Modal
+        visible={showStartDateModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowStartDateModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.pickerModalContent, { backgroundColor: cardBg }]}
+          >
+            <View style={styles.pickerHeader}>
+              <TouchableOpacity onPress={() => setShowStartDateModal(false)}>
+                <AppText size={16} color={theme.textMuted}>
+                  Cancel
+                </AppText>
+              </TouchableOpacity>
+              <AppText size={17} weight="bold" color={theme.text}>
+                Select Start Date
+              </AppText>
+              <TouchableOpacity onPress={() => confirmDate("start")}>
+                <AppText size={16} weight="bold" color={theme.primary}>
+                  Done
+                </AppText>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={tempDate}
+              mode="date"
+              display="spinner"
+              // If you are on Android, you can also force the theme (optional)
+              themeVariant={isDark ? "dark" : "light"}
+              onChange={(_, selectedDate) => {
+                if (selectedDate) setTempDate(selectedDate);
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* End Date Modal */}
+      <Modal
+        visible={showEndDateModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEndDateModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.pickerModalContent, { backgroundColor: cardBg }]}
+          >
+            <View style={styles.pickerHeader}>
+              <TouchableOpacity onPress={() => setShowEndDateModal(false)}>
+                <AppText size={16} color={theme.textMuted}>
+                  Cancel
+                </AppText>
+              </TouchableOpacity>
+              <AppText size={17} weight="bold" color={theme.text}>
+                Select End Date
+              </AppText>
+              <TouchableOpacity onPress={() => confirmDate("end")}>
+                <AppText size={16} weight="bold" color={theme.primary}>
+                  Done
+                </AppText>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={tempDate}
+              mode="date"
+              display="spinner"
+              onChange={(_, selectedDate) => {
+                if (selectedDate) setTempDate(selectedDate);
+              }}
+              themeVariant={isDark ? "dark" : "light"}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Start Time Modal */}
+      <Modal
+        visible={showStartTimeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowStartTimeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.pickerModalContent, { backgroundColor: cardBg }]}
+          >
+            <View style={styles.pickerHeader}>
+              <TouchableOpacity onPress={() => setShowStartTimeModal(false)}>
+                <AppText size={16} color={theme.textMuted}>
+                  Cancel
+                </AppText>
+              </TouchableOpacity>
+              <AppText size={17} weight="bold" color={theme.text}>
+                Select Start Time
+              </AppText>
+              <TouchableOpacity onPress={() => confirmTime("start")}>
+                <AppText size={16} weight="bold" color={theme.primary}>
+                  Done
+                </AppText>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={tempTime}
+              mode="time"
+              display="spinner"
+              onChange={(_, selectedTime) => {
+                if (selectedTime) setTempTime(selectedTime);
+              }}
+              themeVariant={isDark ? "dark" : "light"}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* End Time Modal */}
+      <Modal
+        visible={showEndTimeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEndTimeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.pickerModalContent, { backgroundColor: cardBg }]}
+          >
+            <View style={styles.pickerHeader}>
+              <TouchableOpacity onPress={() => setShowEndTimeModal(false)}>
+                <AppText size={16} color={theme.textMuted}>
+                  Cancel
+                </AppText>
+              </TouchableOpacity>
+              <AppText size={17} weight="bold" color={theme.text}>
+                Select End Time
+              </AppText>
+              <TouchableOpacity onPress={() => confirmTime("end")}>
+                <AppText size={16} weight="bold" color={theme.primary}>
+                  Done
+                </AppText>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={tempTime}
+              mode="time"
+              display="spinner"
+              onChange={(_, selectedTime) => {
+                if (selectedTime) setTempTime(selectedTime);
+              }}
+              themeVariant={isDark ? "dark" : "light"}
+            />
           </View>
         </View>
       </Modal>
@@ -781,82 +1031,76 @@ export default function SendParcelScreen() {
   );
 }
 
-// ==========================================
-// SCALABLE FLEXBOX SHEET DESIGNS
-// ==========================================
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  flex: { flex: 1 },
+  headerWrap: { paddingBottom: 4 },
   headerSafeArea: {
-    borderBottomWidth: 1,
-    ...Platform.select({
-      android: { paddingTop: StatusBar.currentHeight ?? 12 },
-    }),
+    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 48,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
   },
-  backText: { fontSize: 20, fontWeight: "bold" },
-  brandText: {
-    fontFamily: "RethinkSans-Bold",
-    fontSize: 20,
-    letterSpacing: -0.6,
-  },
-  scroll: { flex: 1 },
-  scrollContent: {
+
+  keyboardContainer: { flex: 1 },
+  mainScrollView: { flex: 1 },
+  scrollContentLayout: {
     paddingTop: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-  },
-  sectionTitle: {
-    fontFamily: "RethinkSans-Bold",
-    fontSize: 13,
-    letterSpacing: 1.2,
-    marginBottom: 10,
-    textTransform: "uppercase",
-  },
-  inputContainer: {
-    height: 56,
-    borderRadius: 16,
-    borderWidth: 1.5,
     paddingHorizontal: 16,
-    justifyContent: "center",
-    marginBottom: 20,
+    paddingBottom: Platform.OS === "ios" ? 40 : 24,
   },
-  clickableInputContainer: {
+
+  sectionTitle: {
+    marginBottom: 10,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    paddingHorizontal: 4,
+  },
+
+  inputCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    height: 56,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    paddingHorizontal: 16,
+    height: 62,
+    borderRadius: 64,
+    paddingHorizontal: 14,
     marginBottom: 20,
   },
-  selectTextLabel: { flex: 1, fontSize: 15, fontFamily: "RethinkSans-Medium" },
-  textInput: {
-    fontFamily: "RethinkSans-Medium",
-    fontSize: 16,
-    flex: 1,
+  fieldIconChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 64,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  card: {
-    borderRadius: 20,
-    borderWidth: 1.5,
-    paddingHorizontal: 16,
+  smallIconChip: {
+    width: 26,
+    height: 26,
+    borderRadius: 64,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  choosePill: {
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    marginBottom: 20,
+    borderRadius: 64,
+  },
+
+  card: {
+    borderRadius: 32,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 24,
   },
   toggleRow: {
     flexDirection: "row",
@@ -865,67 +1109,55 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   toggleLabel: { flex: 1 },
-  toggleTitle: { fontFamily: "RethinkSans-Bold", fontSize: 16 },
-  toggleDesc: { fontFamily: "RethinkSans-Regular", fontSize: 14 },
   divider: { height: 1, marginVertical: 4 },
+
   row: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 20,
+    marginBottom: 24,
   },
   dateButton: {
     flex: 1,
-    height: 54,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    justifyContent: "center",
-    paddingHorizontal: 14,
+    height: 56,
+    borderRadius: 64,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
   },
-  dateText: {
-    fontFamily: "RethinkSans-Medium",
-    fontSize: 15.5,
-  },
-  pickerContainer: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 10,
-    marginBottom: 20,
-  },
+
   priceInput: {
     flex: 1,
-    height: 54,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
-    justifyContent: "center",
+    height: 56,
+    borderRadius: 64,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
   },
   priceTextInput: {
-    fontFamily: "RethinkSans-Medium",
     fontSize: 16,
+    fontWeight: "500",
+    flex: 1,
   },
+
   primaryButton: {
-    height: 58,
-    borderRadius: 18,
+    height: 56,
+    borderRadius: 64,
     justifyContent: "center",
     alignItems: "center",
- 
   },
-  buttonText: {
-    fontFamily: "RethinkSans-Bold",
-    fontSize: 16.5,
-    color: "#FFFFFF",
-  },
+
+  /* Modals */
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(10, 8, 20, 0.55)",
   },
-  dismissArea: { flex: 1 },
+  modalDismissArea: { flex: 1 },
   modalContent: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingBottom: Platform.OS === "ios" ? 44 : 32,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    paddingHorizontal: 0,
+    paddingBottom: Platform.OS === "ios" ? 34 : 24,
   },
   modalKnob: {
     width: 44,
@@ -934,23 +1166,27 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginVertical: 12,
   },
-  modalTitle: {
-    fontFamily: "RethinkSans-Bold",
-    fontSize: 21,
-    marginBottom: 16,
-  },
+
   summaryCard: {
-    borderWidth: 1.5,
-    borderRadius: 18,
+    borderRadius: RADIUS.lg,
     padding: 18,
-    gap: 14,
+    marginVertical: 16,
   },
-  summaryText: {
-    fontFamily: "RethinkSans-Medium",
-    fontSize: 16,
-    lineHeight: 24,
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 12,
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(120, 120, 140, 0.14)",
   },
-  centerContent: { alignItems: "center", paddingVertical: 20 },
+
+  centerContent: {
+    alignItems: "center",
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+  },
   statusCircle: {
     width: 80,
     height: 80,
@@ -959,16 +1195,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  statusTitle: {
-    fontFamily: "RethinkSans-Bold",
-    fontSize: 19,
-    marginBottom: 8,
-    textAlign: "center",
+
+  /* Picker Modals */
+  pickerModalContent: {
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "ios" ? 34 : 20,
+    minHeight: 380,
   },
-  statusBody: {
-    fontSize: 15.5,
-    textAlign: "center",
-    lineHeight: 22,
-    paddingHorizontal: 10,
+  pickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(150,150,170,0.15)",
   },
 });

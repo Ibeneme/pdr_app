@@ -8,7 +8,7 @@ import paymentSlice from './slices/payment.slice';
 import notificationSlice from './slices/notification.slice';
 import walletSlice from './slices/wallet.slice';
 import driverSlice from './slices/driver.slice';
-import requestSlice from './slices/request.slice';
+import requestSlice from './slices/new.request.slice';
 
 export const store = configureStore({
     reducer: {

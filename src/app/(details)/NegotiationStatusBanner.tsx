@@ -49,7 +49,6 @@ export const NegotiationStatusBanner: React.FC<
     "ride cancelled",
   ];
 
-  // Helper colors based on status string context
   const getStatusColor = (currentStatus: string) => {
     switch (currentStatus.toLowerCase()) {
       case "ride completed":
@@ -58,7 +57,7 @@ export const NegotiationStatusBanner: React.FC<
         return "#EF4444"; // Red
       case "ride ongoing":
       case "ride started":
-        return theme.primary; // Brand Primary
+        return theme.primary;
       default:
         return "#F59E0B"; // Amber Warning
     }
@@ -82,11 +81,11 @@ export const NegotiationStatusBanner: React.FC<
           >
             <MaterialCommunityIcons
               name={status.includes("complete") ? "car-check" : "car-connected"}
-              size={20}
+              size={16}
               color={getStatusColor(status)}
             />
           </View>
-          <View>
+          <View style={{ flex: 1 }}>
             <AppText
               size={11}
               color={theme.textMuted}
@@ -140,7 +139,7 @@ export const NegotiationStatusBanner: React.FC<
               <ActivityIndicator
                 size="small"
                 color={theme.primary}
-                style={{ marginVertical: 12 }}
+                style={{ marginVertical: 14 }}
               />
             ) : (
               rideStatuses.map((st) => (
@@ -164,7 +163,7 @@ export const NegotiationStatusBanner: React.FC<
                     weight={
                       status.toLowerCase() === st.toLowerCase()
                         ? "bold"
-                        : "regular"
+                        : "medium"
                     }
                     style={{ textTransform: "capitalize" }}
                   >
@@ -188,10 +187,9 @@ export const NegotiationStatusBanner: React.FC<
 
 const styles = StyleSheet.create({
   rideStatusBanner: {
-    borderRadius: 14,
+    borderRadius: 24,
     borderWidth: 1,
-    padding: 12,
-    marginVertical: 8,
+    padding: 16,
     width: "100%",
   },
   statusBannerHeader: {
@@ -202,12 +200,12 @@ const styles = StyleSheet.create({
   statusInfoGroup: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     flex: 1,
   },
   iconWrapper: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
@@ -217,28 +215,28 @@ const styles = StyleSheet.create({
   },
   statusText: {
     textTransform: "capitalize",
-    marginTop: 1,
+    marginTop: 2,
   },
   updateTriggerBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 14,
   },
   statusDropdown: {
-    marginTop: 12,
-    paddingTop: 6,
+    marginTop: 14,
+    paddingTop: 8,
     borderTopWidth: 1,
+    gap: 2,
   },
   statusOptionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    marginVertical: 1,
+    paddingHorizontal: 10,
+    borderRadius: 12,
   },
 });

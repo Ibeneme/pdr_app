@@ -9,9 +9,10 @@ import {
 } from "react-native";
 import { AppText } from "@/components/AppText";
 import { useTheme } from "@/contexts/ThemeContext";
+import { MapPin } from "lucide-react-native";
 
 const { width } = Dimensions.get("window");
-const COLUMN_WIDTH = (width - 48 - 12) / 2;
+const COLUMN_WIDTH = (width - 48 - 2) / 2;
 
 export type GeoRegion =
   | "South-South"
@@ -30,7 +31,7 @@ export interface NigeriaCity {
   tagline: string;
 }
 
-// Comprehensive dataset matching 36 states + FCT, featuring core towns
+// Comprehensive dataset
 const NIGERIA_CITIES: NigeriaCity[] = [
   // --- SOUTH-SOUTH ---
   {
@@ -446,13 +447,12 @@ interface NigeriaCitiesGridProps {
 export const NigeriaCitiesGrid: React.FC<NigeriaCitiesGridProps> = ({
   onCityPress,
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRegion, setSelectedRegion] = useState<"All" | GeoRegion>(
     "All"
   );
 
-  // Combined high-performance sorting filter logic
   const filteredCities = useMemo(() => {
     return NIGERIA_CITIES.filter((city) => {
       const matchesRegion =
@@ -468,6 +468,18 @@ export const NigeriaCitiesGrid: React.FC<NigeriaCitiesGridProps> = ({
   const leftColumnItems = filteredCities.filter((_, index) => index % 2 === 0);
   const rightColumnItems = filteredCities.filter((_, index) => index % 2 !== 0);
 
+  const getRegionColor = (region: GeoRegion) => {
+    const colors: Record<GeoRegion, string> = {
+      "South-South": "#10b981",
+      "South-East": "#8b5cf6",
+      "South-West": "#f59e0b",
+      "North-Central": "#3b82f6",
+      "North-West": "#ec4899",
+      "North-East": "#ef4444",
+    };
+    return colors[region];
+  };
+
   const renderCard = (city: NigeriaCity) => (
     <TouchableOpacity
       key={city.id}
@@ -475,65 +487,68 @@ export const NigeriaCitiesGrid: React.FC<NigeriaCitiesGridProps> = ({
       style={[
         styles.cardWrapper,
         {
-          height: city.height,
-          backgroundColor: theme.background,
+          backgroundColor: isDark ? theme.surface : "#FFFFFF",
           borderColor: theme.border,
         },
       ]}
       onPress={() => onCityPress?.(city)}
     >
       <View style={styles.cardContent}>
-        <View
-          style={[
-            styles.regionBadge,
-            { backgroundColor: theme.background, borderColor: theme.border },
-          ]}
-        >
-          <AppText size={9} weight="bold" color={theme.textMuted}>
-            {city.region}
-          </AppText>
+        <View style={styles.headerRow}>
+          <View
+            style={[
+              styles.regionBadge,
+              { backgroundColor: getRegionColor(city.region) + "15" },
+            ]}
+          >
+            <AppText size={9} weight="bold" color={getRegionColor(city.region)}>
+              {city.region.split("-")[0]}
+            </AppText>
+          </View>
+
+          <MapPin size={16} color={theme.textMuted} />
         </View>
-        <View>
-          <AppText size={15} weight="bold" color={theme.text} numberOfLines={1}>
+
+        <View style={styles.cityInfo}>
+          <AppText size={16} weight="bold" color={theme.text} numberOfLines={1}>
             {city.name}
           </AppText>
-          <AppText size={11} color={theme.textMuted} style={{ marginTop: 1 }}>
-            {city.state} State
-          </AppText>
-          <AppText
-            size={10}
-            color={theme.textMuted}
-            weight="medium"
-            numberOfLines={1}
-            style={{ marginTop: 4, opacity: 0.7 }}
-          >
-            {city.tagline}
+          <AppText size={13} color={theme.textMuted} style={{ marginTop: 2 }}>
+            {city.state}
           </AppText>
         </View>
+
+        <AppText
+          size={11.5}
+          color={theme.textMuted}
+          style={styles.tagline}
+          numberOfLines={2}
+        >
+          {city.tagline}
+        </AppText>
       </View>
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      {/* 🔍 Search bar */}
+      {/* Search Bar */}
       <TextInput
         style={[
           styles.searchInput,
           {
             borderColor: theme.border,
             color: theme.text,
-            backgroundColor: theme.background,
+            backgroundColor: isDark ? theme.surface : "#F8F8F8",
           },
         ]}
-        placeholder="Search hubs, towns, states..."
-        placeholderTextColor="#888"
+        placeholder="Search cities, states or hubs..."
+        placeholderTextColor={theme.textMuted}
         value={searchQuery}
         onChangeText={setSearchQuery}
-        clearButtonMode="while-editing"
       />
 
-      {/* 🧭 Horizontal Regions Filter Switcher */}
+      {/* Region Filter Tabs */}
       <View style={styles.tabBarWrapper}>
         <ScrollView
           horizontal
@@ -549,16 +564,20 @@ export const NigeriaCitiesGrid: React.FC<NigeriaCitiesGridProps> = ({
                 style={[
                   styles.tabPill,
                   {
-                    backgroundColor: isSelected ? theme.primary : theme.background,
+                    backgroundColor: isSelected
+                      ? theme.primary
+                      : isDark
+                      ? theme.surface
+                      : "#FFFFFF",
                     borderColor: isSelected ? theme.primary : theme.border,
                   },
                 ]}
                 onPress={() => setSelectedRegion(region)}
               >
                 <AppText
-                  size={12}
+                  size={12.5}
                   weight="bold"
-                  color={isSelected ? "#FFF" : theme.text}
+                  color={isSelected ? "#FFFFFF" : theme.text}
                 >
                   {region}
                 </AppText>
@@ -568,12 +587,16 @@ export const NigeriaCitiesGrid: React.FC<NigeriaCitiesGridProps> = ({
         </ScrollView>
       </View>
 
-      {/* 🏙️ Dynamic Columns Presentation Layout */}
+      {/* Cities Grid */}
       <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
         {filteredCities.length === 0 ? (
           <View style={styles.emptyState}>
-            <AppText size={14} color={theme.textMuted}>
-              No regional hubs found matching criteria.
+            <AppText
+              size={15}
+              color={theme.textMuted}
+              style={{ textAlign: "center" }}
+            >
+              No hubs found matching your search.
             </AppText>
           </View>
         ) : (
@@ -592,52 +615,77 @@ export const NigeriaCitiesGrid: React.FC<NigeriaCitiesGridProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 24, paddingBottom: 24, flex: 1 },
+  container: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    flex: 1,
+  },
   searchInput: {
-    height: 50,
+    height: 52,
     borderWidth: 1,
-    borderRadius: 15,
-    paddingHorizontal: 15,
-    marginBottom: 14,
-    fontSize: 15,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    fontSize: 15.5,
+    marginBottom: 16,
   },
   tabBarWrapper: {
     marginBottom: 20,
-    marginHorizontal: -24,
+    marginHorizontal: -20,
   },
   tabsScrollContent: {
-    paddingHorizontal: 24,
-    gap: 8,
+    paddingHorizontal: 20,
+    gap: 10,
+    paddingBottom: 8,
   },
   tabPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 30,
     borderWidth: 1.5,
   },
-  masonryLayoutRow: { flexDirection: "row", justifyContent: "space-between" },
-  columnTrack: { width: COLUMN_WIDTH, gap: 12 },
+  masonryLayoutRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  columnTrack: {
+    width: COLUMN_WIDTH,
+    gap: 14,
+  },
   cardWrapper: {
     width: "100%",
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    padding: 2,
+
   },
-  cardContent: { flex: 1, padding: 14, justifyContent: "space-between" },
+  cardContent: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 18,
+    justifyContent: "space-between",
+    minHeight: 138,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   regionBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  cityInfo: {
+    marginBottom: 8,
+  },
+  tagline: {
+    opacity: 0.85,
+    lineHeight: 15,
   },
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 40,
+    paddingVertical: 60,
   },
 });

@@ -12,6 +12,15 @@ import {
 import { useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import { AppText } from "@/components/AppText";
+import {
+  ArrowLeft,
+  CheckCheck,
+  MessageCircle,
+  Package,
+  Car,
+  Bell,
+  BellOff,
+} from "lucide-react-native";
 
 // Redux
 import { useDispatch, useSelector } from "react-redux";
@@ -23,10 +32,29 @@ import {
 } from "@/api/slices/notification.slice";
 import { getUser } from "@/api/secureStore";
 
+const UNREAD_PURPLE = "#7C3AED";
+const UNREAD_PURPLE_LIGHT = "#EDE9FE";
+
+const getNotifMeta = (type?: string) => {
+  switch ((type || "").toUpperCase()) {
+    case "MESSAGE":
+    case "CHAT":
+      return { Icon: MessageCircle };
+    case "PARCEL":
+    case "DELIVERY":
+      return { Icon: Package };
+    case "RIDE":
+      return { Icon: Car };
+    default:
+      return { Icon: Bell };
+  }
+};
+
 export default function NotificationsScreen() {
   const { theme: colors, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
+
   const [currentUser, setCurrentUser] = useState<any | null>(null);
 
   const { notifications, unreadCount, isLoading, error } = useSelector(
@@ -41,51 +69,49 @@ export default function NotificationsScreen() {
     fetchCurrentUser();
   }, []);
 
-  // Fetch notifications on component initialization
   useEffect(() => {
     dispatch(fetchNotifications());
   }, [dispatch]);
 
+  // ==================== IMPROVED NAVIGATION ====================
   const handleNotificationClick = async (notification: any) => {
     if (!notification) return;
 
-    // 1. Mark as read
+    // Mark as read
     if (!notification.read && notification._id) {
       dispatch(markNotificationAsRead(notification._id));
     }
 
-    const payloadData = notification.data || {};
-    const negotiation = payloadData.negotiation;
+    const data = notification.data || {};
+    const negotiationId = data.negotiationId || data.negotiation;
 
-    // 2. Routing logic for CHAT_SCREEN
+    // For Chat / Message Notifications
     if (
+      notification.type === "CHAT" ||
       notification.type === "MESSAGE" ||
-      payloadData.router === "CHAT_SCREEN"
+      data.router?.includes("chat")
     ) {
-      if (!negotiation) return;
+      if (!negotiationId) {
+        console.warn("No negotiationId found in notification");
+        return;
+      }
 
-      return router.push({
-        pathname: "/(details)/ChatScreen",
+      router.push({
+        pathname: "/(features)/chat_screen", // Make sure this matches your file
         params: {
-          id: negotiation._id,
-          parcelId: negotiation.service, // Mapping your service ID to parcelId
-          isServiceProvider: String(negotiation.isProvider),
-          currentUserId: String(currentUser?._id || currentUser?.id),
+          id: negotiationId, // negotiation ID
+          currentId: currentUser?._id || currentUser?.id,
         },
       });
+
+      return;
     }
 
-    // 3. Optional: Routing for standard Detail screens
-    if (payloadData.negotiationId) {
-      return router.push({
-        pathname: "/(details)/details",
-        params: { id: payloadData.negotiationId },
-      });
-    }
+    // You can extend this for other notification types later
+    console.log("Notification clicked (no specific route):", notification.type);
   };
 
   const handleMarkAllAsRead = () => {
-    console.log("✅ Marking all notifications as read");
     dispatch(markAllNotificationsAsRead());
   };
 
@@ -93,72 +119,62 @@ export default function NotificationsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* --- HEADER CONTAINER --- */}
-      <SafeAreaView
-        style={[
-          styles.headerSafeArea,
-          {
-            backgroundColor: colors.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={[
-              styles.backTextButton,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-              },
-            ]}
-            activeOpacity={0.7}
-            onPress={() => router.back()}
-          >
-            <AppText size={13} weight="bold" color={colors.text}>
-              Back
-            </AppText>
-          </TouchableOpacity>
+      {/* HEADER */}
+      <View style={styles.headerWrap}>
+        <SafeAreaView style={styles.headerSafeArea}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={[styles.backButton, { backgroundColor: colors.surface }]}
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+            >
+              <ArrowLeft size={19} color={colors.text} />
+            </TouchableOpacity>
 
-          <View style={styles.headerTitleContainer}>
-            <AppText size={18} weight="bold" color={colors.text}>
-              Notifications
-            </AppText>
-            {unreadCount > 0 && (
-              <View
+            <View style={styles.headerTitleContainer}>
+              <AppText size={18} weight="bold" color={colors.text}>
+                Notifications
+              </AppText>
+              {unreadCount > 0 && (
+                <View
+                  style={[
+                    styles.unreadBadgeFrame,
+                    { backgroundColor: UNREAD_PURPLE_LIGHT },
+                  ]}
+                >
+                  <AppText size={10} weight="bold" color={UNREAD_PURPLE}>
+                    {unreadCount} new
+                  </AppText>
+                </View>
+              )}
+            </View>
+
+            {unreadCount > 0 ? (
+              <TouchableOpacity
+                onPress={handleMarkAllAsRead}
                 style={[
-                  styles.unreadBadgeFrame,
-                  { borderColor: colors.primary },
+                  styles.markAllButton,
+                  { backgroundColor: colors.surface },
                 ]}
+                activeOpacity={0.7}
               >
-                <AppText size={10} weight="bold" color={colors.primary}>
-                  {unreadCount} NEW
-                </AppText>
-              </View>
+                <CheckCheck size={14} color={colors.text} />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.headerSpacer} />
             )}
           </View>
+        </SafeAreaView>
+      </View>
 
-          {unreadCount > 0 ? (
-            <TouchableOpacity onPress={handleMarkAllAsRead}>
-              <AppText size={13} weight="bold" color={colors.primary}>
-                Mark all read
-              </AppText>
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 60 }} /> // Spacer to balance header row layout
-          )}
-        </View>
-      </SafeAreaView>
-
-      {/* --- CONTENT AREA LAYOUTS --- */}
+      {/* CONTENT */}
       {isLoading && notifications.length === 0 ? (
         <View style={styles.centeredContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : error ? (
         <View style={styles.centeredContainer}>
-          <AppText size={14} color="red" style={{ textAlign: "center" }}>
+          <AppText size={14} color="#EF4444" style={{ textAlign: "center" }}>
             {error}
           </AppText>
         </View>
@@ -170,81 +186,106 @@ export default function NotificationsScreen() {
         >
           {notifications.length === 0 ? (
             <View style={styles.emptyState}>
-              <AppText size={16} color={colors.textMuted}>
+              <View
+                style={[
+                  styles.emptyIconCircle,
+                  { backgroundColor: colors.surface },
+                ]}
+              >
+                <BellOff size={26} color={colors.textMuted} />
+              </View>
+              <AppText size={15} weight="bold" color={colors.text}>
                 No notifications yet
+              </AppText>
+              <AppText
+                size={13}
+                color={colors.textMuted}
+                style={styles.emptySubText}
+              >
+                Updates on your deliveries, rides, and messages will appear here
               </AppText>
             </View>
           ) : (
-            notifications.map((notif: any, index: number) => (
-              <TouchableOpacity
-                key={notif._id || index}
-                style={[
-                  styles.notificationCardFrame,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: notif.read ? colors.border : colors.primary,
-                    borderWidth: notif.read ? 1 : 1.5,
-                  },
-                ]}
-                onPress={() => handleNotificationClick(notif)}
-                activeOpacity={0.85}
-              >
-                <View style={styles.cardHeaderRowAlignment}>
+            notifications.map((notif: any, index: number) => {
+              const { Icon } = getNotifMeta(notif.type);
+
+              return (
+                <TouchableOpacity
+                  key={notif._id || index}
+                  style={[
+                    styles.notificationCardFrame,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: notif.read
+                        ? colors.border
+                        : UNREAD_PURPLE_LIGHT,
+                    },
+                  ]}
+                  onPress={() => handleNotificationClick(notif)}
+                  activeOpacity={0.85}
+                >
+                  {!notif.read && (
+                    <View
+                      style={[
+                        styles.unreadMarkerLine,
+                        { backgroundColor: UNREAD_PURPLE },
+                      ]}
+                    />
+                  )}
+
                   <View
                     style={[
-                      styles.typeInlineLabelBadge,
+                      styles.notifIconChip,
                       {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
+                        backgroundColor: notif.read
+                          ? `${colors.text}0D`
+                          : `${UNREAD_PURPLE}15`,
                       },
                     ]}
                   >
+                    <Icon
+                      size={18}
+                      color={notif.read ? colors.text : UNREAD_PURPLE}
+                    />
+                  </View>
+
+                  <View style={styles.notificationContentBlock}>
+                    <View style={styles.cardHeaderRowAlignment}>
+                      <AppText
+                        size={14.5}
+                        weight="bold"
+                        color={colors.text}
+                        numberOfLines={1}
+                        style={styles.notifTitle}
+                      >
+                        {notif.title}
+                      </AppText>
+                      <AppText
+                        size={11}
+                        weight="medium"
+                        color={colors.textMuted}
+                      >
+                        {notif.createdAt
+                          ? new Date(notif.createdAt).toLocaleDateString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : ""}
+                      </AppText>
+                    </View>
+
                     <AppText
-                      size={9}
-                      weight="bold"
-                      color={notif.read ? colors.textMuted : colors.primary}
+                      size={13}
+                      color={colors.textMuted}
+                      numberOfLines={2}
+                      style={{ lineHeight: 18 }}
                     >
-                      {notif.type || "GENERAL"}
+                      {notif.body || notif.message}
                     </AppText>
                   </View>
-                  <AppText size={11} weight="medium" color={colors.textMuted}>
-                    {notif.createdAt
-                      ? new Date(notif.createdAt).toLocaleDateString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : ""}
-                  </AppText>
-                </View>
-
-                <View style={styles.notificationContentBlock}>
-                  <AppText
-                    size={15}
-                    weight="bold"
-                    color={colors.text}
-                    style={{ marginBottom: 4 }}
-                  >
-                    {notif.title}
-                  </AppText>
-                  <AppText
-                    size={13}
-                    color={colors.textMuted}
-                    style={{ lineHeight: 18 }}
-                  >
-                    {notif.body || notif.message}
-                  </AppText>
-                </View>
-
-                {!notif.read && (
-                  <View
-                    style={[
-                      styles.unreadMarkerLine,
-                      { backgroundColor: colors.primary },
-                    ]}
-                  />
-                )}
-              </TouchableOpacity>
-            ))
+                </TouchableOpacity>
+              );
+            })
           )}
         </ScrollView>
       )}
@@ -253,28 +294,25 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ... your existing styles (unchanged)
   container: { flex: 1 },
+  headerWrap: { paddingBottom: 4 },
   headerSafeArea: {
-    ...Platform.select({
-      android: {
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 4 : 12,
-      },
-    }),
+    paddingTop: Platform.OS === "ios" ? 6 : StatusBar.currentHeight || 10,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     paddingVertical: 14,
   },
-  backTextButton: {
-    height: 36,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
   },
   headerTitleContainer: {
     flexDirection: "row",
@@ -282,46 +320,61 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   unreadBadgeFrame: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
+  markAllButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerSpacer: { width: 38 },
+
   scrollView: { flex: 1 },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     paddingTop: 20,
     paddingBottom: 50,
   },
+
   notificationCardFrame: {
-    borderRadius: 18,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderRadius: 16,
     marginBottom: 12,
-    padding: 16,
+    padding: 14,
+    borderWidth: 1,
     position: "relative",
     overflow: "hidden",
+  },
+  notifIconChip: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
   },
   cardHeaderRowAlignment: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 4,
+    gap: 8,
   },
-  typeInlineLabelBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  notificationContentBlock: {
-    width: "100%",
-  },
+  notifTitle: { flex: 1 },
+  notificationContentBlock: { flex: 1 },
   unreadMarkerLine: {
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    width: 4,
+    width: 3.5,
   },
+
   centeredContainer: {
     flex: 1,
     justifyContent: "center",
@@ -329,8 +382,23 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   emptyState: {
-    paddingTop: 60,
+    paddingTop: 70,
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
+  },
+  emptyIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  emptySubText: {
+    textAlign: "center",
+    marginTop: 2,
+    paddingHorizontal: 30,
+    lineHeight: 18,
   },
 });

@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  Platform,
   Alert,
   ActivityIndicator,
 } from "react-native";
@@ -16,13 +15,12 @@ import { AppText } from "@/components/AppText";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
-import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft } from "lucide-react-native";
 
 export default function ReceiptScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
-  const viewShotRef = useRef<ViewShot>(null);
+  const viewShotRef = useRef<any>(null);
   const [isSharing, setIsSharing] = useState(false);
 
   const params = useLocalSearchParams<{
@@ -30,20 +28,27 @@ export default function ReceiptScreen() {
     negotiationId: string;
     amount: string;
     status: string;
-    pickupAddress: string;
-    destinationCity: string;
+    pickupAddress?: string;
+    destinationCity?: string;
     notes?: string;
     serviceType?: string;
     payerName?: string;
     payerEmail?: string;
     providerName?: string;
-    providerEmail?: string;
   }>();
 
   const formattedAmount = Number(params.amount || 0).toLocaleString();
   const shortReference = String(params.negotiationId || params.id || "UNKNOWN")
     .slice(-12)
     .toUpperCase();
+
+  const formattedDate = new Date().toLocaleDateString("en-NG", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   const handleShareReceipt = async () => {
     if (isSharing) return;
@@ -55,8 +60,8 @@ export default function ReceiptScreen() {
       }
 
       const localUri = await viewShotRef.current.capture();
-
       const isSharingAvailable = await Sharing.isAvailableAsync();
+
       if (!isSharingAvailable) {
         Alert.alert(
           "Sharing Unavailable",
@@ -71,7 +76,7 @@ export default function ReceiptScreen() {
         UTI: "public.png",
       });
     } catch (error: any) {
-      console.error("❌ [SHARE_ERROR]", error);
+      console.error("❌ [SHARE_ERROR]:", error);
       Alert.alert("Sharing Failed", "Could not share the receipt.");
     } finally {
       setIsSharing(false);
@@ -79,417 +84,359 @@ export default function ReceiptScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: isDark ? theme.background : "#F4F6F9" },
+      ]}
+    >
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* PREMIUM HEADER GRADIENT */}
-      <LinearGradient
-        colors={isDark ? ["#2A1B4D", theme.surface] : ["#F8F5FF", "#FFFFFF"]}
-        style={styles.headerGradient}
-      >
-        <SafeAreaView style={styles.headerSafeArea}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
-              <ArrowLeft size={24} color={theme.text} />
-            </TouchableOpacity>
+      {/* HEADER BAR */}
+      <SafeAreaView style={{ backgroundColor: "transparent" }}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[
+              styles.headerIconButton,
+              { backgroundColor: theme.surface },
+            ]}
+            activeOpacity={0.7}
+          >
+            <ArrowLeft size={20} color={theme.text} />
+          </TouchableOpacity>
 
-            <AppText size={20} weight="bold" color={theme.text}>
-              Transaction Receipt
-            </AppText>
+          <AppText size={16} weight="bold" color={theme.text}>
+            Receipt Details
+          </AppText>
 
-            <TouchableOpacity
-              style={styles.shareButton}
-              onPress={handleShareReceipt}
-              disabled={isSharing}
-            >
-              {isSharing ? (
-                <ActivityIndicator size="small" color={theme.primary} />
-              ) : (
-                <Ionicons
-                  name="share-social-outline"
-                  size={22}
-                  color={theme.text}
-                />
-              )}
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+          <TouchableOpacity
+            style={[
+              styles.headerIconButton,
+              { backgroundColor: theme.surface },
+            ]}
+            onPress={handleShareReceipt}
+            disabled={isSharing}
+          >
+            {isSharing ? (
+              <ActivityIndicator size="small" color={theme.primary} />
+            ) : (
+              <Ionicons
+                name="share-social-outline"
+                size={20}
+                color={theme.text}
+              />
+            )}
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
 
       <ScrollView
         style={styles.mainScrollView}
         contentContainerStyle={styles.scrollContentLayout}
         showsVerticalScrollIndicator={false}
       >
+        {/* CAPTURABLE TICKET CONTAINER */}
         <ViewShot
           ref={viewShotRef}
           options={{ format: "png", quality: 0.95 }}
-          style={{ backgroundColor: theme.background }}
+          style={[styles.ticketCard, { backgroundColor: theme.surface }]}
         >
-          <View style={styles.receiptContainer}>
-            {/* Receipt Header */}
-            <View style={styles.receiptHeader}>
-              <View style={styles.successBadge}>
-                <Ionicons name="checkmark-done" size={36} color="#FFF" />
-              </View>
+          {/* TOP HEADER */}
+          <View style={styles.ticketTopHeader}>
+            <AppText size={38} style={styles.emojiHeading}>
+              🎉
+            </AppText>
+            <AppText
+              size={22}
+              weight="bold"
+              color={theme.text}
+              style={styles.thankYouText}
+            >
+              Thank you!
+            </AppText>
+            <AppText
+              size={13}
+              color={theme.textMuted}
+              style={styles.subReceiptMessage}
+            >
+              Your transaction was processed successfully
+            </AppText>
+          </View>
+
+          {/* NOTCHED DASHED DIVIDER */}
+          <View style={styles.notchDashedDividerRow}>
+            <View
+              style={[
+                styles.leftNotchCutout,
+                { backgroundColor: isDark ? theme.background : "#F4F6F9" },
+              ]}
+            />
+            <View
+              style={[
+                styles.dashedDividerLine,
+                { borderColor: isDark ? theme.border : "#E2E8F0" },
+              ]}
+            />
+            <View
+              style={[
+                styles.rightNotchCutout,
+                { backgroundColor: isDark ? theme.background : "#F4F6F9" },
+              ]}
+            />
+          </View>
+
+          {/* AMOUNT BANNER */}
+          <View style={styles.amountBannerGroup}>
+            <AppText size={11} color={theme.textMuted} weight="bold">
+              AMOUNT PAID
+            </AppText>
+            <AppText size={28} weight="bold" color={theme.text}>
+              ₦{formattedAmount}
+            </AppText>
+            <View style={styles.statusBadge}>
+              <MaterialCommunityIcons
+                name="check-circle"
+                size={14}
+                color="#10B981"
+              />
               <AppText
-                size={32}
-                weight="bold"
-                color={theme.text}
-                style={{ marginTop: 16 }}
-              >
-                ₦{formattedAmount}
-              </AppText>
-              <AppText
-                size={13}
+                size={12}
                 weight="bold"
                 color="#10B981"
-                style={{ marginTop: 8, letterSpacing: 0.5 }}
+                style={{ marginLeft: 4 }}
               >
-                SECURELY PROCESSED
+                {String(params.status || "Paid").toUpperCase()}
+              </AppText>
+            </View>
+          </View>
+
+          {/* ITEM DETAILS TABLE */}
+          <View style={[styles.detailsBlock, { borderColor: theme.border }]}>
+            <View style={styles.detailRow}>
+              <AppText size={13} color={theme.textMuted}>
+                Reference
+              </AppText>
+              <AppText size={13} weight="bold" color={theme.text}>
+                #{shortReference}
               </AppText>
             </View>
 
-            <View
-              style={[styles.dashedDivider, { borderColor: theme.border }]}
+            <View style={styles.detailRow}>
+              <AppText size={13} color={theme.textMuted}>
+                Date & Time
+              </AppText>
+              <AppText size={13} weight="bold" color={theme.text}>
+                {formattedDate}
+              </AppText>
+            </View>
+
+            {params.serviceType ? (
+              <View style={styles.detailRow}>
+                <AppText size={13} color={theme.textMuted}>
+                  Service Type
+                </AppText>
+                <AppText size={13} weight="bold" color={theme.text}>
+                  {params.serviceType.replace(/_/g, " ").toUpperCase()}
+                </AppText>
+              </View>
+            ) : null}
+
+            {params.payerName ? (
+              <View style={styles.detailRow}>
+                <AppText size={13} color={theme.textMuted}>
+                  Payer
+                </AppText>
+                <AppText size={13} weight="bold" color={theme.text}>
+                  {params.payerName}
+                </AppText>
+              </View>
+            ) : null}
+
+            {params.providerName ? (
+              <View style={styles.detailRow}>
+                <AppText size={13} color={theme.textMuted}>
+                  Provider / Partner
+                </AppText>
+                <AppText size={13} weight="bold" color={theme.text}>
+                  {params.providerName}
+                </AppText>
+              </View>
+            ) : null}
+
+            {params.pickupAddress && params.pickupAddress !== "N/A" ? (
+              <View style={styles.detailRow}>
+                <AppText size={13} color={theme.textMuted}>
+                  Pickup Location
+                </AppText>
+                <AppText
+                  size={13}
+                  weight="bold"
+                  color={theme.text}
+                  style={styles.rightAlignText}
+                >
+                  {params.pickupAddress}
+                </AppText>
+              </View>
+            ) : null}
+
+            {params.destinationCity && params.destinationCity !== "N/A" ? (
+              <View style={styles.detailRow}>
+                <AppText size={13} color={theme.textMuted}>
+                  Destination
+                </AppText>
+                <AppText
+                  size={13}
+                  weight="bold"
+                  color={theme.text}
+                  style={styles.rightAlignText}
+                >
+                  {params.destinationCity}
+                </AppText>
+              </View>
+            ) : null}
+          </View>
+
+          {/* FOOTER GUARANTEE NOTE */}
+          <View style={styles.ticketFooterNote}>
+            <MaterialCommunityIcons
+              name="shield-check"
+              size={18}
+              color="#10B981"
             />
-
-            {/* Transaction Details */}
-            <View
-              style={[
-                styles.infoCard,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <View style={styles.dataRow}>
-                <AppText size={13} color={theme.textMuted}>
-                  Service
-                </AppText>
-                <AppText size={13} weight="bold" color={theme.text}>
-                  {params.serviceType === "offer_a_ride"
-                    ? "Ride Share"
-                    : "Parcel Delivery"}
-                </AppText>
-              </View>
-              <View style={styles.dataRow}>
-                <AppText size={13} color={theme.textMuted}>
-                  Status
-                </AppText>
-                <View style={styles.statusBadge}>
-                  <View
-                    style={[styles.statusDot, { backgroundColor: "#10B981" }]}
-                  />
-                  <AppText size={13} weight="bold" color="#10B981">
-                    {params.status?.toUpperCase() || "PAID"}
-                  </AppText>
-                </View>
-              </View>
-              <View style={styles.dataRow}>
-                <AppText size={13} color={theme.textMuted}>
-                  Reference
-                </AppText>
-                <AppText size={13} weight="bold" color={theme.text}>
-                  {shortReference}
-                </AppText>
-              </View>
-            </View>
-
-            {/* Parties */}
             <AppText
-              size={12}
-              weight="bold"
+              size={11}
               color={theme.textMuted}
-              style={styles.sectionTitle}
+              style={{ marginLeft: 6 }}
             >
-              PARTICIPATING PARTIES
+              Escrow Security Active • Padiman Verified
             </AppText>
-
-            <View
-              style={[
-                styles.infoCard,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <View style={styles.partyRow}>
-                <View
-                  style={[
-                    styles.partyIcon,
-                    { backgroundColor: theme.primary + "15" },
-                  ]}
-                >
-                  <Ionicons
-                    name="wallet-outline"
-                    size={20}
-                    color={theme.primary}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <AppText size={12} color={theme.textMuted} weight="bold">
-                    PAYER
-                  </AppText>
-                  <AppText
-                    size={15}
-                    weight="bold"
-                    color={theme.text}
-                    style={{ marginTop: 2 }}
-                  >
-                    {params.payerName || "Client"}
-                  </AppText>
-                  <AppText size={13} color={theme.textMuted}>
-                    {params.payerEmail || "—"}
-                  </AppText>
-                </View>
-              </View>
-
-              <View
-                style={[styles.divider, { backgroundColor: theme.border }]}
-              />
-
-              <View style={styles.partyRow}>
-                <View
-                  style={[styles.partyIcon, { backgroundColor: "#10B98115" }]}
-                >
-                  <Ionicons name="bicycle-outline" size={20} color="#10B981" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <AppText size={12} color={theme.textMuted} weight="bold">
-                    PROVIDER
-                  </AppText>
-                  <AppText
-                    size={15}
-                    weight="bold"
-                    color={theme.text}
-                    style={{ marginTop: 2 }}
-                  >
-                    {params.providerName || "Service Provider"}
-                  </AppText>
-                  <AppText size={13} color={theme.textMuted}>
-                    {params.providerEmail || "—"}
-                  </AppText>
-                </View>
-              </View>
-            </View>
-
-            {/* Logistics */}
-            <AppText
-              size={12}
-              weight="bold"
-              color={theme.textMuted}
-              style={styles.sectionTitle}
-            >
-              LOGISTICS DETAILS
-            </AppText>
-
-            <View
-              style={[
-                styles.infoCard,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <View style={styles.timelineRow}>
-                <View style={styles.timelineDotContainer}>
-                  <Ionicons
-                    name="radio-button-on"
-                    size={18}
-                    color={theme.primary}
-                  />
-                  <View
-                    style={[
-                      styles.timelineLine,
-                      { backgroundColor: theme.border },
-                    ]}
-                  />
-                  <Ionicons name="location" size={18} color="#EF4444" />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <View>
-                    <AppText size={12} color={theme.textMuted}>
-                      PICKUP
-                    </AppText>
-                    <AppText
-                      size={14}
-                      weight="bold"
-                      color={theme.text}
-                      style={{ marginTop: 4 }}
-                    >
-                      {params.pickupAddress || "Not provided"}
-                    </AppText>
-                  </View>
-                  <View style={{ marginTop: 20 }}>
-                    <AppText size={12} color={theme.textMuted}>
-                      DESTINATION
-                    </AppText>
-                    <AppText
-                      size={14}
-                      weight="bold"
-                      color={theme.text}
-                      style={{ marginTop: 4 }}
-                    >
-                      {params.destinationCity || "Not provided"}
-                    </AppText>
-                  </View>
-                </View>
-              </View>
-
-              {params.notes && (
-                <View
-                  style={[
-                    styles.notesBox,
-                    {
-                      backgroundColor: theme.background,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                >
-                  <AppText size={12} weight="bold" color={theme.textMuted}>
-                    NOTES
-                  </AppText>
-                  <AppText
-                    size={13}
-                    color={theme.text}
-                    style={{ marginTop: 6, lineHeight: 20 }}
-                  >
-                    {params.notes}
-                  </AppText>
-                </View>
-              )}
-            </View>
           </View>
         </ViewShot>
-      </ScrollView>
 
-      {/* Bottom Action */}
-      <View
-        style={[
-          styles.footer,
-          { backgroundColor: theme.surface, borderTopColor: theme.border },
-        ]}
-      >
+        {/* BOTTOM ACTION BUTTON */}
         <TouchableOpacity
           style={[styles.doneButton, { backgroundColor: theme.primary }]}
           onPress={() => router.back()}
+          activeOpacity={0.8}
         >
-          <AppText size={16} weight="bold" color="#FFFFFF">
+          <AppText color="#FFFFFF" weight="bold" size={15}>
             Done
           </AppText>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerGradient: {
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-  },
-  headerSafeArea: {
-    paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
-  },
   headerRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  backButton: { padding: 8 },
-  shareButton: { padding: 8 },
-
-  mainScrollView: { flex: 1 },
-  scrollContentLayout: {
-    paddingTop: 24,
-    paddingHorizontal: 16,
-    paddingBottom: 100,
-  },
-
-  receiptContainer: { backgroundColor: "transparent" },
-  receiptHeader: { alignItems: "center", marginBottom: 20 },
-  successBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#10B981",
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: "center",
     alignItems: "center",
   },
+  mainScrollView: { flex: 1 },
+  scrollContentLayout: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 30,
+  },
+  ticketCard: {
+    borderRadius: 24,
+    paddingVertical: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  ticketTopHeader: {
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  emojiHeading: { textAlign: "center", marginBottom: 6 },
+  thankYouText: { textAlign: "center" },
+  subReceiptMessage: { textAlign: "center", marginTop: 4, lineHeight: 18 },
 
-  dashedDivider: {
+  notchDashedDividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 20,
+    position: "relative",
+  },
+  leftNotchCutout: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginLeft: -10,
+  },
+  rightNotchCutout: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: -10,
+  },
+  dashedDividerLine: {
+    flex: 1,
     borderWidth: 1,
     borderStyle: "dashed",
-    marginVertical: 20,
+    height: 1,
   },
-  divider: { height: 1, marginVertical: 16 },
 
-  infoCard: {
-    borderRadius: 24,
-    borderWidth: 1.5,
-    padding: 20,
-    marginBottom: 24,
-  },
-  dataRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  amountBannerGroup: {
     alignItems: "center",
-    paddingVertical: 8,
+    marginBottom: 20,
+    paddingHorizontal: 20,
   },
-  sectionTitle: {
-    letterSpacing: 1.2,
-    marginBottom: 10,
-    paddingHorizontal: 4,
-  },
-
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "#10B98115",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  statusDot: { width: 7, height: 7, borderRadius: 4 },
-
-  partyRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  partyIcon: {
-    width: 42,
-    height: 42,
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
+    marginTop: 8,
   },
 
-  timelineRow: { flexDirection: "row", gap: 16 },
-  timelineDotContainer: { alignItems: "center", paddingVertical: 4 },
-  timelineLine: { width: 2, flex: 1, marginVertical: 6 },
-
-  notesBox: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === "ios" ? 36 : 20,
+  detailsBlock: {
+    marginHorizontal: 20,
     borderTopWidth: 1,
+    paddingTop: 16,
+    gap: 12,
   },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  rightAlignText: {
+    maxWidth: "60%",
+    textAlign: "right",
+  },
+
+  ticketFooterNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 24,
+    paddingTop: 16,
+  },
+
   doneButton: {
-    height: 56,
-    borderRadius: 20,
+    height: 52,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 20,
   },
 });

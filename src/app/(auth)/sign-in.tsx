@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -12,11 +12,13 @@ import {
   useWindowDimensions,
   Modal,
   SafeAreaView,
+  Animated,
+  Easing,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
 import { useTheme } from "@/contexts/ThemeContext";
-import { loginUser } from "@/api/slices/auth.slice"; // Assumed matching slice name for your auth action
+import { loginUser } from "@/api/slices/auth.slice";
 import { AppDispatch } from "@/api/store";
 import {
   ArrowRight,
@@ -25,6 +27,8 @@ import {
   Sun,
   Moon,
   AlertCircle,
+  MapPin,
+  Flag,
 } from "lucide-react-native";
 import { saveAuthToken, saveUser } from "@/api/secureStore";
 
@@ -50,6 +54,57 @@ export default function SignInScreen() {
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
 
+  // ---- Motion ----
+  const entranceAnim = useRef(new Animated.Value(0)).current;
+  const emailFocusAnim = useRef(new Animated.Value(0)).current;
+  const passwordFocusAnim = useRef(new Animated.Value(0)).current;
+  const routeDotAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(entranceAnim, {
+      toValue: 1,
+      duration: 480,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(routeDotAnim, {
+          toValue: 1,
+          duration: 2200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(routeDotAnim, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+        Animated.delay(600),
+      ])
+    ).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const animateFocus = (anim: Animated.Value, focused: boolean) => {
+    Animated.timing(anim, {
+      toValue: focused ? 1 : 0,
+      duration: 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false, // color interpolation
+    }).start();
+  };
+
+  const emailBorderColor = emailFocusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [theme.border, theme.primary],
+  });
+  const passwordBorderColor = passwordFocusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [theme.border, theme.primary],
+  });
+
   const triggerAlertModal = (title: string, message: string) => {
     setAlertTitle(title);
     setAlertMessage(message);
@@ -71,7 +126,6 @@ export default function SignInScreen() {
 
     setLoading(true);
     try {
-      // Direct integration mapping to your slice endpoint schema logic
       const result = await dispatch(loginUser({ email, password })).unwrap();
       console.log(
         "[SIGNIN SUCCESS] Authentication handshake completely verified.",
@@ -107,7 +161,6 @@ export default function SignInScreen() {
         }`
       );
 
-      // Catch specific backend user state validation triggers: unverified redirect mapping
       if (
         err === "Account not verified. A new OTP has been sent to your email."
       ) {
@@ -115,7 +168,7 @@ export default function SignInScreen() {
           "[SIGNIN REDIRECT] Account unverified status identified. Forwarding user over to OTP portal views."
         );
         router.push({
-          pathname: "/(auth)/otp", // Adjust match alignment paths if different
+          pathname: "/(auth)/otp",
           params: { email, flow: "login" },
         });
       } else {
@@ -147,7 +200,7 @@ export default function SignInScreen() {
         ]}
       />
 
-      {/* FIXED TOP NAVIGATION BAR WITH SAFEAREAVIEW CONTAINER */}
+      {/* FIXED TOP NAVIGATION BAR */}
       <SafeAreaView
         style={[
           styles.fixedHeaderContainer,
@@ -179,35 +232,98 @@ export default function SignInScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header - Fixed to top spacing layout values cleanly */}
-        <View style={styles.header}>
-          <Text style={[styles.welcomeText, { color: theme.text }]}>
-            Welcome Back
-          </Text>
-          <Text style={[styles.subtitle, { color: theme.textMuted }]}>
-            Sign in to continue delivering with Padiman Route
-          </Text>
-        </View>
+        <Animated.View
+          style={{
+            opacity: entranceAnim,
+            transform: [
+              {
+                translateY: entranceAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [16, 0],
+                }),
+              },
+            ],
+          }}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.eyebrowRow}>
+              <View
+                style={[styles.eyebrowDot, { backgroundColor: theme.primary }]}
+              />
+              <Text style={[styles.eyebrowText, { color: theme.textMuted }]}>
+                PADIMAN ROUTE
+              </Text>
+            </View>
+            <Text style={[styles.welcomeText, { color: theme.text }]}>
+              Welcome back
+            </Text>
+            <Text style={[styles.subtitle, { color: theme.textMuted }]}>
+              Sign in to continue delivering
+            </Text>
+          </View>
+
+          {/* SIGNATURE: route strip */}
+          <View style={styles.routeStrip}>
+            <View
+              style={[
+                styles.routeNodeStart,
+                { backgroundColor: theme.primary },
+              ]}
+            >
+              <MapPin size={11} color="#FFF" strokeWidth={2.5} />
+            </View>
+            <View style={styles.routeLineTrack}>
+              <View
+                style={[styles.routeLineDashed, { borderColor: theme.border }]}
+              />
+              <Animated.View
+                style={[
+                  styles.routeDot,
+                  {
+                    backgroundColor: theme.primary,
+                    transform: [
+                      {
+                        translateX: routeDotAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 220], // Adjust this translation limit based on track width
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </View>
+            <View
+              style={[
+                styles.routeNodeEnd,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+            >
+              <Flag size={11} color={theme.primary} strokeWidth={2.5} />
+            </View>
+          </View>
+        </Animated.View>
 
         {/* Form Structure */}
         <View style={styles.formContainer}>
           {/* Email input field */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.textMuted }]}>
-              Email Address
+              Email address
             </Text>
-            <View
+            <Animated.View
               style={[
                 styles.inputWrapper,
                 {
                   backgroundColor: theme.surface,
-                  borderColor: isEmailFocused ? theme.primary : theme.border,
+                  borderColor: emailBorderColor,
                 },
               ]}
             >
               <Mail
                 size={18}
-                color={theme.textMuted}
+                color={isEmailFocused ? theme.primary : theme.textMuted}
                 style={styles.inputIcon}
               />
               <TextInput
@@ -218,10 +334,16 @@ export default function SignInScreen() {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                onFocus={() => setIsEmailFocused(true)}
-                onBlur={() => setIsEmailFocused(false)}
+                onFocus={() => {
+                  setIsEmailFocused(true);
+                  animateFocus(emailFocusAnim, true);
+                }}
+                onBlur={() => {
+                  setIsEmailFocused(false);
+                  animateFocus(emailFocusAnim, false);
+                }}
               />
-            </View>
+            </Animated.View>
           </View>
 
           {/* Password input field */}
@@ -229,18 +351,18 @@ export default function SignInScreen() {
             <Text style={[styles.label, { color: theme.textMuted }]}>
               Password
             </Text>
-            <View
+            <Animated.View
               style={[
                 styles.inputWrapper,
                 {
                   backgroundColor: theme.surface,
-                  borderColor: isPasswordFocused ? theme.primary : theme.border,
+                  borderColor: passwordBorderColor,
                 },
               ]}
             >
               <Lock
                 size={18}
-                color={theme.textMuted}
+                color={isPasswordFocused ? theme.primary : theme.textMuted}
                 style={styles.inputIcon}
               />
               <TextInput
@@ -250,13 +372,20 @@ export default function SignInScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={hidePassword}
-                onFocus={() => setIsPasswordFocused(true)}
-                onBlur={() => setIsPasswordFocused(false)}
+                onFocus={() => {
+                  setIsPasswordFocused(true);
+                  animateFocus(passwordFocusAnim, true);
+                }}
+                onBlur={() => {
+                  setIsPasswordFocused(false);
+                  animateFocus(passwordFocusAnim, false);
+                }}
               />
               <TouchableOpacity
                 onPress={() => setHidePassword(!hidePassword)}
                 style={styles.toggleVisibilityBtn}
                 activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text
                   style={[
@@ -267,7 +396,7 @@ export default function SignInScreen() {
                   {hidePassword ? "Show" : "Hide"}
                 </Text>
               </TouchableOpacity>
-            </View>
+            </Animated.View>
           </View>
 
           {/* Forgot Link Button */}
@@ -275,25 +404,32 @@ export default function SignInScreen() {
             style={styles.forgotBtn}
             onPress={() => router.push("/(auth)/forgot-password")}
             activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Text style={[styles.forgotText, { color: theme.primary }]}>
-              Forgot Password?
+              Forgot password?
             </Text>
           </TouchableOpacity>
 
           {/* Action CTA */}
           <TouchableOpacity
-            style={[styles.signInBtn, { backgroundColor: theme.primary }]}
+            style={[
+              styles.signInBtn,
+              {
+                backgroundColor: theme.primary,
+                opacity: loading ? 0.85 : 1,
+              },
+            ]}
             onPress={handleSignIn}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#FFF" size="small" />
             ) : (
               <>
-                <Text style={styles.signInBtnText}>Sign In</Text>
-                <ArrowRight size={16} color="#FFF" strokeWidth={3} />
+                <Text style={styles.signInBtnText}>Sign in</Text>
+                <ArrowRight size={16} color="#FFF" strokeWidth={2.5} />
               </>
             )}
           </TouchableOpacity>
@@ -307,9 +443,10 @@ export default function SignInScreen() {
           <TouchableOpacity
             onPress={() => router.push("/(auth)/sign-up")}
             activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
           >
             <Text style={[styles.createAccountText, { color: theme.primary }]}>
-              Create Account
+              Create account
             </Text>
           </TouchableOpacity>
         </View>
@@ -335,8 +472,13 @@ export default function SignInScreen() {
               style={[styles.dragHandle, { backgroundColor: theme.border }]}
             />
 
-            <View style={styles.errorIconWrapper}>
-              <AlertCircle size={56} color="#EF5350" strokeWidth={2} />
+            <View
+              style={[
+                styles.errorIconWrapper,
+                { backgroundColor: "rgba(239,83,80,0.12)" },
+              ]}
+            >
+              <AlertCircle size={40} color="#EF5350" strokeWidth={2} />
             </View>
 
             <Text style={[styles.sheetTitle, { color: theme.text }]}>
@@ -350,7 +492,7 @@ export default function SignInScreen() {
             <TouchableOpacity
               style={[styles.sheetBtn, { backgroundColor: "#EF5350" }]}
               onPress={() => setAlertDialogVisible(false)}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               <Text style={styles.sheetBtnText}>Dismiss</Text>
             </TouchableOpacity>
@@ -397,19 +539,74 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === "ios" ? 130 : 100,
   },
   header: {
-    marginBottom: 32,
+    marginBottom: 20,
     zIndex: 2,
+  },
+  eyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
+    gap: 7,
+  },
+  eyebrowDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  eyebrowText: {
+    fontFamily: "RethinkSans-Bold",
+    fontSize: 11,
+    letterSpacing: 1.6,
   },
   welcomeText: {
     fontFamily: "RethinkSans-Bold",
     fontSize: 32,
     letterSpacing: -1,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   subtitle: {
     fontFamily: "RethinkSans-Regular",
     fontSize: 15,
     lineHeight: 22,
+  },
+  routeStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 32,
+    zIndex: 2,
+  },
+  routeNodeStart: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  routeNodeEnd: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  routeLineTrack: {
+    flex: 1,
+    height: 8,
+    marginHorizontal: 8,
+    justifyContent: "center",
+  },
+  routeLineDashed: {
+    height: 0,
+    borderTopWidth: 1.5,
+    borderStyle: "dashed",
+  },
+  routeDot: {
+    position: "absolute",
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    top: 1.5,
   },
   formContainer: {
     zIndex: 2,
@@ -465,10 +662,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: 12,
-    shadowColor: "#8E24AA",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
     elevation: 4,
   },
   signInBtnText: {
@@ -491,7 +688,6 @@ const styles = StyleSheet.create({
     fontFamily: "RethinkSans-Bold",
     fontSize: 14,
   },
-  /* MODAL MODELLING LOGIC */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -522,11 +718,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   errorIconWrapper: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 16,
   },
   sheetTitle: {
     fontFamily: "RethinkSans-Bold",
-    fontSize: 24,
+    fontSize: 22,
     marginBottom: 10,
     textAlign: "center",
   },

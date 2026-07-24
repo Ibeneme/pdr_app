@@ -9,7 +9,7 @@ import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/api/store";
 import { releaseEscrowEarnings } from "@/api/slices/payment.slice";
 import { AppText } from "@/components/AppText";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface ThemeProps {
   surface: string;
@@ -23,7 +23,7 @@ interface ThemeProps {
 interface EscrowReleaseButtonProps {
   negotiationId: string;
   theme: ThemeProps;
-  isServiceProvider?: boolean; // Added parameter to separate view vectors
+  isServiceProvider?: boolean;
   onSuccess?: () => void;
 }
 
@@ -104,68 +104,111 @@ export const EscrowReleaseButton: React.FC<EscrowReleaseButtonProps> = ({
         styles.card,
         { backgroundColor: theme.surface, borderColor: theme.border },
         isServiceProvider &&
-          step !== "completed" && { backgroundColor: `${theme.primary}08` },
+          step !== "completed" && { backgroundColor: `${theme.primary}06` },
       ]}
     >
-      {/* Header Context Banner */}
+      {/* HEADER SECTION INLINE WITH VERIFIED PROFILE AND FEEDS ARCHITECTURE */}
       <View style={styles.headerRow}>
-        <Ionicons
-          name={
-            step === "completed"
-              ? "checkmark-circle"
-              : isServiceProvider
-              ? "time-outline"
-              : "lock-open-outline"
-          }
-          size={18}
-          color={step === "completed" ? "#10B981" : theme.primary}
-        />
-        <AppText
-          size={13}
-          weight="bold"
-          color={theme.text}
-          style={{ marginLeft: 6 }}
+        <View
+          style={[
+            styles.iconWrapper,
+            {
+              backgroundColor:
+                step === "completed"
+                  ? "#10B98112"
+                  : isServiceProvider
+                  ? `${theme.primary}12`
+                  : `${theme.primary}12`,
+            },
+          ]}
         >
-          {step === "completed"
-            ? "PAYMENT RELEASED SUCCESSFULLY"
-            : isServiceProvider
-            ? "AWAITING CUSTOMER APPROVAL"
-            : "ESCROW FUNDS CONTROL"}
-        </AppText>
+          <Ionicons
+            name={
+              step === "completed"
+                ? "checkmark-done"
+                : isServiceProvider
+                ? "time-outline"
+                : "shield-checkmark-outline"
+            }
+            size={16}
+            color={step === "completed" ? "#10B981" : theme.primary}
+          />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <AppText
+            size={11}
+            weight="bold"
+            color={theme.textMuted}
+            style={styles.labelTitle}
+          >
+            {step === "completed"
+              ? "TRANSACTION SETTLED"
+              : isServiceProvider
+              ? "ESCROW MONITOR"
+              : "ESCROW SECURITY CONTROLS"}
+          </AppText>
+          <AppText size={14} weight="bold" color={theme.text}>
+            {step === "completed"
+              ? "Payment Released"
+              : isServiceProvider
+              ? "Awaiting Release"
+              : "Disburse Funds"}
+          </AppText>
+        </View>
       </View>
 
-      {/* Conditional Interface Rendering based on role matrix and step tracking */}
+      {/* BODY SEGMENTS TRANSLATING THE CLEAN TEXT CONTAINER SYSTEM */}
       {step === "initial" && (
         <View style={styles.contentBody}>
           {isServiceProvider ? (
-            /* SERVICE PROVIDER INITIAL STANDBY STATE */
-            <AppText
-              size={12}
-              color={theme.textMuted}
-              style={styles.descriptionText}
+            <View
+              style={[
+                styles.infoPod,
+                {
+                  backgroundColor: theme.background,
+                  borderColor: theme.border,
+                },
+              ]}
             >
-              The ride is complete. Escrow funds will move into your spendable
-              ledger balance once the passenger authorizes release from their
-              dashboard.
-            </AppText>
-          ) : (
-            /* PASSENGER INITIAL ACTION STATE */
-            <>
               <AppText
                 size={12}
                 color={theme.textMuted}
                 style={styles.descriptionText}
               >
-                If this ride or delivery service is completed, you can release
-                the payment out of escrow directly into the provider's balance.
+                The ride is complete. Escrow earnings will move into your
+                spendable balance once the passenger authorizes release from
+                their dashboard.
               </AppText>
+            </View>
+          ) : (
+            <>
+              <View
+                style={[
+                  styles.infoPod,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <AppText
+                  size={12}
+                  color={theme.textMuted}
+                  style={styles.descriptionText}
+                >
+                  If this ride or delivery service is completed perfectly, you
+                  can safely release the escrowed payment directly into the
+                  provider's wallet balance.
+                </AppText>
+              </View>
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: theme.primary }]}
+                style={[styles.actionBtn, { backgroundColor: theme.text }]}
                 onPress={handleInitiate}
                 activeOpacity={0.8}
               >
-                <AppText size={13} weight="bold" color="#FFF">
-                  Confirm Request is Completed
+                <AppText size={13} weight="bold" color={theme.surface}>
+                  Authorize escrow release
                 </AppText>
               </TouchableOpacity>
             </>
@@ -175,15 +218,22 @@ export const EscrowReleaseButton: React.FC<EscrowReleaseButtonProps> = ({
 
       {step === "confirming" && (
         <View style={styles.contentBody}>
-          <AppText
-            size={12}
-            color="#F59E0B"
-            weight="bold"
-            style={styles.descriptionText}
+          <View
+            style={[
+              styles.infoPod,
+              { backgroundColor: "#FFFBF2", borderColor: "#F59E0B30" },
+            ]}
           >
-            ⚠️ Are you absolutely sure? This action is irreversible and
-            transfers funds immediately.
-          </AppText>
+            <AppText
+              size={12}
+              color="#D97706"
+              weight="medium"
+              style={styles.descriptionText}
+            >
+              This action is fully irreversible and transfers funds immediately.
+              Ensure your ride context was finalized safely.
+            </AppText>
+          </View>
 
           <View style={styles.buttonGroup}>
             <TouchableOpacity
@@ -193,14 +243,14 @@ export const EscrowReleaseButton: React.FC<EscrowReleaseButtonProps> = ({
               activeOpacity={0.8}
             >
               <AppText size={13} weight="bold" color={theme.textMuted}>
-                Cancel
+                Dismiss
               </AppText>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.actionBtn,
-                { backgroundColor: "#10B981", flex: 1, marginTop: 0 },
+                { backgroundColor: theme.primary, flex: 1, marginTop: 0 },
               ]}
               onPress={handleConfirmRelease}
               disabled={localLoading}
@@ -210,7 +260,7 @@ export const EscrowReleaseButton: React.FC<EscrowReleaseButtonProps> = ({
                 <ActivityIndicator size="small" color="#FFF" />
               ) : (
                 <AppText size={13} weight="bold" color="#FFF">
-                  Yes, Release Funds
+                  Confirm Release
                 </AppText>
               )}
             </TouchableOpacity>
@@ -220,15 +270,22 @@ export const EscrowReleaseButton: React.FC<EscrowReleaseButtonProps> = ({
 
       {step === "completed" && (
         <View style={styles.contentBody}>
-          <AppText
-            size={13}
-            color="#10B981"
-            weight="medium"
-            style={styles.descriptionText}
+          <View
+            style={[
+              styles.infoPod,
+              { backgroundColor: "#F0FDF4", borderColor: "#10B98125" },
+            ]}
           >
-            🎉 Funds released! The service provider's spendable ledger balance
-            has been updated.
-          </AppText>
+            <AppText
+              size={12}
+              color="#15803D"
+              weight="medium"
+              style={styles.descriptionText}
+            >
+              Funds released successfully. The service provider's spendable
+              ledger balance has been credited.
+            </AppText>
+          </View>
         </View>
       )}
     </View>
@@ -237,44 +294,61 @@ export const EscrowReleaseButton: React.FC<EscrowReleaseButtonProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 14,
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 14,
-    marginVertical: 8,
+    padding: 16,
+    marginVertical: 10,
     width: "100%",
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    gap: 12,
+  },
+  iconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  labelTitle: {
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 1,
   },
   contentBody: {
-    marginTop: 4,
+    marginTop: 14,
+  },
+  infoPod: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 14,
   },
   descriptionText: {
     lineHeight: 18,
-    marginBottom: 12,
   },
   actionBtn: {
-    height: 40,
-    borderRadius: 10,
+    height: 46,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 4,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
+    width: "100%",
   },
   cancelBtn: {
-    height: 40,
-    borderRadius: 10,
+    height: 46,
+    borderRadius: 24,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
+    backgroundColor: "transparent",
   },
   buttonGroup: {
     flexDirection: "row",
     gap: 10,
     alignItems: "center",
-    marginTop: 4,
   },
 });

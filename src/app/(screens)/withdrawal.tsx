@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -12,8 +12,9 @@ import {
   TouchableWithoutFeedback,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   ArrowLeft,
@@ -23,11 +24,12 @@ import {
   X,
   ChevronDown,
   Search,
+  RefreshCw,
+  Info,
+  Check,
 } from "lucide-react-native";
 import { AppText } from "@/components/AppText";
-import { LinearGradient } from "expo-linear-gradient";
 
-// Redux Integration Imports
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/api/store";
 import {
@@ -37,53 +39,90 @@ import {
   resolveAccount,
 } from "@/api/slices/wallet.slice";
 
-const WITHDRAWAL_FEE_PERCENTAGE = 1.5; // 1.5% fee
+const WITHDRAWAL_FEE_PERCENTAGE = 10;
+
+// Same neutral ink tone used in WalletScreen
+const INK = "#111318";
 
 export default function WithdrawScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
-
-  // Redux Hook Allocations
   const dispatch = useDispatch<AppDispatch>();
-  const { balance, withdrawableBalance, earnings, bankList, isLoading } =
-    useSelector((state: RootState) => state.wallet);
 
-  // Form Controlled Input Fields
+  const [walletData, setWalletData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const { bankList: rawBankList } = useSelector(
+    (state: RootState) => state.wallet
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log(
+        "[UI_FOCUS_LIFECYCLE] 🔄 Wallet screen has come into view. Fetching updated ledger stats..."
+      );
+      setIsLoading(true);
+
+      dispatch(fetchWallet())
+        .unwrap()
+        .then((data) => {
+          console.log(
+            "[UI_FOCUS_SUCCESS] ✅ Wallet data updated successfully:",
+            data
+          );
+          // Store response in local state
+          setWalletData(data?.wallet || data);
+        })
+        .catch((error) => {
+          console.error(
+            "[UI_FOCUS_ERROR] ❌ Failed to fetch wallet data:",
+            error
+          );
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }, [dispatch])
+  );
+
+  const balance = walletData?.balance || 0;
+  const withdrawableBalance = walletData?.withdrawableBalance || 0;
+  const earnings = walletData?.earnings || [];
+  const withdrawals = walletData?.withdrawals || [];
+
+  const bankList = rawBankList ?? [];
+
   const [amount, setAmount] = useState("");
   const [selectedBankCode, setSelectedBankCode] = useState("");
   const [selectedBankName, setSelectedBankName] = useState("Select a Bank");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
   const [isResolving, setIsResolving] = useState(false);
-
-  // Search Query State for Bank Picker
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Sheet UI Triggers
   const [modalVisible, setModalVisible] = useState(false);
   const [bankPickerVisible, setBankPickerVisible] = useState(false);
+  const [confirmSheetVisible, setConfirmSheetVisible] = useState(false);
+  const [isSubmittingWithdrawal, setIsSubmittingWithdrawal] = useState(false);
   const [modalType, setModalType] = useState<"success" | "error">("error");
   const [modalTitle, setModalTitle] = useState("");
   const [modalMessage, setModalMessage] = useState("");
 
-  // Sync state data on initial context mount
+  // Soft neutral surfaces matching WalletScreen
+  const pageBg = isDark ? theme.background : "#ECECE7";
+  const heroCardBg = isDark ? theme.surface : "#FFFFFF";
+  const tileBg = isDark ? theme.background : "#F4F4F1";
+
   useEffect(() => {
     dispatch(fetchWallet());
     dispatch(fetchBankList());
   }, [dispatch]);
 
-  // Hook watching input rules to fire off account verification hooks automatically
   useEffect(() => {
     const autoResolveBankDetails = async () => {
-      console.log(
-        `🔍 [BANK_RESOLVER] Triggered. AccNum: ${accountNumber}, BankCode: ${selectedBankCode}`
-      );
-
       if (accountNumber.length === 10 && selectedBankCode) {
         setIsResolving(true);
         setAccountName("");
-
-        console.log(`🚀 [BANK_RESOLVER] Dispatching resolveAccount...`);
 
         const resultAction = await dispatch(
           resolveAccount({ accountNumber, bankCode: selectedBankCode })
@@ -92,14 +131,9 @@ export default function WithdrawScreen() {
         setIsResolving(false);
 
         if (resolveAccount.fulfilled.match(resultAction)) {
-          console.log(
-            `✅ [BANK_RESOLVER_SUCCESS] Server returned:`,
-            resultAction.payload
-          );
           setAccountName(resultAction.payload.accountName);
         } else {
           const errorMsg = (resultAction.payload as string) || "Unknown error";
-          console.error(`❌ [BANK_RESOLVER_ERROR] Failed:`, errorMsg);
           triggerModal("error", "Account Verification Failed", errorMsg);
         }
       } else {
@@ -110,7 +144,6 @@ export default function WithdrawScreen() {
     autoResolveBankDetails();
   }, [accountNumber, selectedBankCode, dispatch]);
 
-  // Calculate total values wrapped in escrow holdings
   const pendingEscrowAmount = useMemo(() => {
     if (!earnings || !Array.isArray(earnings)) return 0;
     return earnings
@@ -118,7 +151,23 @@ export default function WithdrawScreen() {
       .reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
   }, [earnings]);
 
-  // Performance-optimized localized client filter for the banks list
+  // Drives the segmented allocation bar on the balance card: how much of
+  // the total balance is free to withdraw vs. sitting in escrow.
+  const allocation = useMemo(() => {
+    const total = Math.max(
+      balance || 0,
+      withdrawableBalance + pendingEscrowAmount,
+      1
+    );
+    const withdrawableRatio = Math.min(withdrawableBalance / total, 1);
+    const escrowRatio = Math.min(
+      pendingEscrowAmount / total,
+      1 - withdrawableRatio
+    );
+    const remainingRatio = Math.max(1 - withdrawableRatio - escrowRatio, 0);
+    return { withdrawableRatio, escrowRatio, remainingRatio };
+  }, [balance, withdrawableBalance, pendingEscrowAmount]);
+
   const filteredBanks = useMemo(() => {
     if (!searchQuery.trim()) return bankList;
     return bankList.filter((bank) =>
@@ -144,7 +193,7 @@ export default function WithdrawScreen() {
     }
   };
 
-  const handleWithdraw = async () => {
+  const handleReviewWithdrawal = () => {
     const numericAmount = parseInt(amount, 10);
 
     if (!amount || isNaN(numericAmount) || numericAmount <= 0) {
@@ -159,7 +208,7 @@ export default function WithdrawScreen() {
       triggerModal(
         "error",
         "Insufficient Withdrawable Balance",
-        `Your active withdrawable balance is ₦${withdrawableBalance.toLocaleString()}. The rest of your total funds are locked in escrow.`
+        `Your active withdrawable balance is ₦${withdrawableBalance.toLocaleString()}.`
       );
       return;
     }
@@ -188,6 +237,15 @@ export default function WithdrawScreen() {
       return;
     }
 
+    // Everything checks out — show the review sheet instead of submitting
+    // straight away, so the person can double-check the destination before
+    // money actually moves.
+    setConfirmSheetVisible(true);
+  };
+
+  const handleConfirmWithdrawal = async () => {
+    const numericAmount = parseInt(amount, 10);
+
     const payload = {
       amount: numericAmount,
       bankDetails: {
@@ -197,7 +255,10 @@ export default function WithdrawScreen() {
       },
     };
 
+    setIsSubmittingWithdrawal(true);
     const resultAction = await dispatch(requestWithdrawal(payload));
+    setIsSubmittingWithdrawal(false);
+    setConfirmSheetVisible(false);
 
     if (requestWithdrawal.fulfilled.match(resultAction)) {
       triggerModal(
@@ -207,8 +268,7 @@ export default function WithdrawScreen() {
       );
     } else {
       const errorMsg =
-        (resultAction.payload as string) ||
-        "An unexpected error occurred processing your payload.";
+        (resultAction.payload as string) || "An unexpected error occurred.";
       triggerModal("error", "Transaction Rejected", errorMsg);
     }
   };
@@ -220,7 +280,6 @@ export default function WithdrawScreen() {
     setBankPickerVisible(false);
   };
 
-  // UI Checks and State Enforcements
   const parsedAmount = parseInt(amount, 10) || 0;
   const fee = Math.round(parsedAmount * (WITHDRAWAL_FEE_PERCENTAGE / 100));
   const netAmount = parsedAmount - fee;
@@ -233,32 +292,35 @@ export default function WithdrawScreen() {
     parsedAmount <= 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: pageBg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* PREMIUM HEADER GRADIENT */}
-      <LinearGradient
-        colors={isDark ? ["#2A1B4D", theme.surface] : ["#F8F5FF", "#FFFFFF"]}
-        style={styles.headerGradient}
-      >
+      {/* Header */}
+      <View style={styles.headerWrap}>
         <SafeAreaView style={styles.headerSafeArea}>
           <View style={styles.headerRow}>
             <TouchableOpacity
               onPress={() => router.back()}
-              style={styles.backButton}
+              style={[styles.circleIconButton, { backgroundColor: heroCardBg }]}
               activeOpacity={0.7}
             >
-              <ArrowLeft size={24} color={theme.text} />
+              <ArrowLeft size={19} color={theme.text} />
             </TouchableOpacity>
 
-            <AppText size={20} weight="bold" color={theme.text}>
+            <AppText size={18} weight="bold" color={theme.text}>
               Withdraw Funds
             </AppText>
 
-            <View style={{ width: 40 }} />
+            <TouchableOpacity
+              onPress={() => dispatch(fetchWallet())}
+              style={[styles.circleIconButton, { backgroundColor: heroCardBg }]}
+              activeOpacity={0.7}
+            >
+              <RefreshCw size={16} color={theme.textMuted} />
+            </TouchableOpacity>
           </View>
         </SafeAreaView>
-      </LinearGradient>
+      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -270,21 +332,61 @@ export default function WithdrawScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* BALANCE DISPLAY */}
+          {/* Page info banner */}
           <View
             style={[
-              styles.mainBalanceCard,
-              { backgroundColor: theme.surface, borderColor: theme.border },
+              styles.infoBanner,
+              {
+                backgroundColor: `${theme.primary}0A`,
+                borderColor: `${theme.primary}25`,
+              },
             ]}
           >
-            <AppText
-              size={12}
-              color={theme.primary}
-              weight="bold"
-              style={{ letterSpacing: 0.8 }}
-            >
-              WITHDRAWABLE AVAILABLE BALANCE
+            <View style={styles.infoBannerHeader}>
+              <Info size={16} color={theme.primary} />
+              <AppText
+                size={13}
+                weight="bold"
+                color={theme.primary}
+                style={{ marginLeft: 6 }}
+              >
+                About Withdrawals
+              </AppText>
+            </View>
+            <AppText size={13} color={theme.text} style={styles.infoBannerText}>
+              Move your withdrawable balance to a Nigerian bank account. Funds
+              held in escrow stay locked until the related delivery or ride is
+              completed, and a {WITHDRAWAL_FEE_PERCENTAGE}% processing fee
+              applies to every transfer.
             </AppText>
+          </View>
+
+          {/* Balance Hero Card */}
+          <View
+            style={[
+              styles.balanceMasterCard,
+              {
+                backgroundColor: heroCardBg,
+                shadowColor: isDark ? "#000" : "#8A8A78",
+              },
+            ]}
+          >
+            <View style={styles.cardTopRow}>
+              <AppText
+                size={12}
+                weight="bold"
+                color={theme.textMuted}
+                style={{ letterSpacing: 0.8 }}
+              >
+                WITHDRAWABLE BALANCE
+              </AppText>
+              <View
+                style={[styles.infoCircleButton, { backgroundColor: tileBg }]}
+              >
+                <Info size={13} color={theme.textMuted} />
+              </View>
+            </View>
+
             <AppText
               size={36}
               weight="bold"
@@ -294,15 +396,64 @@ export default function WithdrawScreen() {
               ₦{withdrawableBalance.toLocaleString()}
             </AppText>
 
-            <View
-              style={[styles.balanceDivider, { backgroundColor: theme.border }]}
-            />
+            <AppText
+              size={13}
+              color={theme.textMuted}
+              style={{ marginBottom: 16 }}
+            >
+              Funds available for immediate withdrawal
+            </AppText>
+
+            {/* Segmented allocation bar — withdrawable / escrow / rest */}
+            <View style={[styles.allocationTrack, { backgroundColor: tileBg }]}>
+              {allocation.withdrawableRatio > 0 && (
+                <View
+                  style={[
+                    styles.allocationSegment,
+                    {
+                      flex: allocation.withdrawableRatio,
+                      backgroundColor: theme.primary,
+                    },
+                  ]}
+                />
+              )}
+              {allocation.escrowRatio > 0 && (
+                <View
+                  style={[
+                    styles.allocationSegment,
+                    {
+                      flex: allocation.escrowRatio,
+                      backgroundColor: "#D97706",
+                    },
+                  ]}
+                />
+              )}
+              {allocation.remainingRatio > 0 && (
+                <View
+                  style={[
+                    styles.allocationSegment,
+                    {
+                      flex: allocation.remainingRatio,
+                      backgroundColor: theme.border,
+                    },
+                  ]}
+                />
+              )}
+            </View>
 
             <View style={styles.subBalanceGrid}>
               <View style={styles.subBalanceItem}>
-                <AppText size={11} color={theme.textMuted} weight="medium">
-                  TOTAL WALLET VALUE
-                </AppText>
+                <View style={styles.legendRow}>
+                  <View
+                    style={[
+                      styles.legendDot,
+                      { backgroundColor: theme.primary },
+                    ]}
+                  />
+                  <AppText size={11} color={theme.textMuted} weight="medium">
+                    TOTAL VALUE
+                  </AppText>
+                </View>
                 <AppText
                   size={15}
                   weight="bold"
@@ -321,9 +472,14 @@ export default function WithdrawScreen() {
               />
 
               <View style={styles.subBalanceItem}>
-                <AppText size={11} color="#D97706" weight="medium">
-                  LOCKED IN ESCROW
-                </AppText>
+                <View style={styles.legendRow}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: "#D97706" }]}
+                  />
+                  <AppText size={11} color="#D97706" weight="medium">
+                    HELD IN ESCROW
+                  </AppText>
+                </View>
                 <AppText
                   size={15}
                   weight="bold"
@@ -334,53 +490,50 @@ export default function WithdrawScreen() {
                 </AppText>
               </View>
             </View>
+
+            {isExceedingWithdrawable && (
+              <View
+                style={[
+                  styles.errorAlertBanner,
+                  { backgroundColor: "rgba(239, 68, 68, 0.1)" },
+                ]}
+              >
+                <AlertCircle size={16} color="#EF4444" />
+                <AppText
+                  size={12}
+                  color="#EF4444"
+                  weight="medium"
+                  style={{ marginLeft: 8, flex: 1 }}
+                >
+                  Amount exceeds your withdrawable balance.
+                </AppText>
+              </View>
+            )}
           </View>
 
-          {isExceedingWithdrawable && (
-            <View
-              style={[
-                styles.errorAlertBanner,
-                {
-                  backgroundColor: "rgba(239, 68, 68, 0.1)",
-                  borderColor: "#EF4444",
-                },
-              ]}
-            >
-              <AlertCircle size={16} color="#EF4444" />
-              <AppText
-                size={12}
-                color="#EF4444"
-                weight="medium"
-                style={{ marginLeft: 8, flex: 1 }}
-              >
-                Amount exceeds your clear payout limits. ₦
-                {pendingEscrowAmount.toLocaleString()} is currently locked
-                safely in escrow.
-              </AppText>
-            </View>
-          )}
-
+          {/* Form Section */}
           <AppText
-            size={12}
+            size={11}
             weight="bold"
             color={theme.textMuted}
             style={{
+              letterSpacing: 1.2,
               marginBottom: 12,
-              letterSpacing: 0.5,
-              textTransform: "uppercase",
               paddingHorizontal: 4,
             }}
           >
-            WITHDRAWAL CONFIGURATION
+            WITHDRAWAL DETAILS
           </AppText>
 
           <View
             style={[
               styles.formCard,
-              { backgroundColor: theme.surface, borderColor: theme.border },
+              {
+                backgroundColor: heroCardBg,
+                shadowColor: isDark ? "#000" : "#8A8A78",
+              },
             ]}
           >
-            {/* Amount Field */}
             <AppText
               size={13}
               weight="medium"
@@ -392,11 +545,7 @@ export default function WithdrawScreen() {
             <TextInput
               style={[
                 styles.input,
-                {
-                  backgroundColor: theme.background,
-                  color: theme.text,
-                  borderColor: theme.border,
-                },
+                { backgroundColor: tileBg, color: theme.text },
               ]}
               placeholder="0.00"
               placeholderTextColor={theme.textMuted}
@@ -405,7 +554,6 @@ export default function WithdrawScreen() {
               onChangeText={setAmount}
             />
 
-            {/* Bank Picker Dropdown */}
             <AppText
               size={13}
               weight="medium"
@@ -418,10 +566,7 @@ export default function WithdrawScreen() {
               style={[
                 styles.input,
                 styles.pickerTrigger,
-                {
-                  backgroundColor: theme.background,
-                  borderColor: theme.border,
-                },
+                { backgroundColor: tileBg },
               ]}
               onPress={() => setBankPickerVisible(true)}
             >
@@ -431,7 +576,6 @@ export default function WithdrawScreen() {
               <ChevronDown size={18} color={theme.textMuted} />
             </TouchableOpacity>
 
-            {/* Account Number Field */}
             <AppText
               size={13}
               weight="medium"
@@ -443,11 +587,7 @@ export default function WithdrawScreen() {
             <TextInput
               style={[
                 styles.input,
-                {
-                  backgroundColor: theme.background,
-                  color: theme.text,
-                  borderColor: theme.border,
-                },
+                { backgroundColor: tileBg, color: theme.text },
               ]}
               placeholder="Enter 10-digit account number"
               placeholderTextColor={theme.textMuted}
@@ -457,7 +597,6 @@ export default function WithdrawScreen() {
               maxLength={10}
             />
 
-            {/* Account Name Field */}
             <AppText
               size={13}
               weight="medium"
@@ -471,13 +610,12 @@ export default function WithdrawScreen() {
                 style={[
                   styles.input,
                   {
-                    backgroundColor: theme.background,
+                    backgroundColor: tileBg,
                     color: theme.text,
-                    borderColor: theme.border,
                     paddingRight: 40,
                   },
                 ]}
-                placeholder="Auto-populated holder name"
+                placeholder="Auto-populated"
                 placeholderTextColor={theme.textMuted}
                 value={accountName}
                 editable={false}
@@ -489,34 +627,36 @@ export default function WithdrawScreen() {
                   style={{ position: "absolute", right: 14 }}
                 />
               )}
+              {!isResolving && accountName.length > 0 && (
+                <View style={styles.verifiedBadge}>
+                  <Check size={12} color="#fff" />
+                </View>
+              )}
             </View>
           </View>
 
-          {/* Summary Card - Updated with Percentage Fee */}
-          {amount && !isNaN(parsedAmount) && parsedAmount > 0 ? (
+          {/* Summary */}
+          {amount && parsedAmount > 0 && (
             <View
               style={[
                 styles.summaryCard,
-                { backgroundColor: theme.surface, borderColor: theme.border },
+                {
+                  backgroundColor: heroCardBg,
+                  shadowColor: isDark ? "#000" : "#8A8A78",
+                },
               ]}
             >
               <AppText size={14} weight="bold" color={theme.text}>
                 Withdrawal Summary
               </AppText>
-
               <View style={styles.summaryRow}>
                 <AppText size={14} color={theme.textMuted}>
                   Amount
                 </AppText>
-                <AppText
-                  size={15}
-                  weight="bold"
-                  color={isExceedingWithdrawable ? "#EF4444" : theme.text}
-                >
+                <AppText size={15} weight="bold" color={theme.text}>
                   ₦{parsedAmount.toLocaleString()}
                 </AppText>
               </View>
-
               <View style={styles.summaryRow}>
                 <AppText size={14} color={theme.textMuted}>
                   Fee ({WITHDRAWAL_FEE_PERCENTAGE}%)
@@ -525,7 +665,6 @@ export default function WithdrawScreen() {
                   ₦{fee.toLocaleString()}
                 </AppText>
               </View>
-
               <View
                 style={[
                   styles.summaryRow,
@@ -545,23 +684,22 @@ export default function WithdrawScreen() {
                 </AppText>
               </View>
             </View>
-          ) : null}
+          )}
 
           <TouchableOpacity
             style={[
               styles.withdrawButton,
               {
-                backgroundColor: isButtonDisabled
-                  ? theme.border
-                  : theme.primary,
+                backgroundColor: isButtonDisabled ? theme.border : INK,
+                marginBottom: 64,
               },
             ]}
-            onPress={handleWithdraw}
+            onPress={handleReviewWithdrawal}
             disabled={isButtonDisabled}
             activeOpacity={0.85}
           >
             {isLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator color="#fff" />
             ) : (
               <>
                 <AppText
@@ -579,47 +717,25 @@ export default function WithdrawScreen() {
               </>
             )}
           </TouchableOpacity>
-
-          <View style={styles.noteContainer}>
-            <CheckCircle size={16} color={theme.textMuted} />
-            <AppText
-              size={12}
-              color={theme.textMuted}
-              style={{ marginLeft: 8, flex: 1 }}
-            >
-              Funds will reflect within 30 minutes to 2 hours during normal
-              banking operations.
-            </AppText>
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* BANK PICKER MODAL */}
+      {/* Bank Picker Modal */}
       <Modal
         visible={bankPickerVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => {
-          setSearchQuery("");
-          setBankPickerVisible(false);
-        }}
+        onRequestClose={() => setBankPickerVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <TouchableOpacity
             style={styles.modalDismissArea}
-            activeOpacity={1}
-            onPress={() => {
-              setSearchQuery("");
-              setBankPickerVisible(false);
-            }}
+            onPress={() => setBankPickerVisible(false)}
           />
           <View
             style={[
               styles.modalContent,
-              {
-                backgroundColor: theme.surface,
-                height: "85%",
-              },
+              { backgroundColor: heroCardBg, height: "85%" },
             ]}
           >
             <View
@@ -631,23 +747,15 @@ export default function WithdrawScreen() {
                 Select Destination Bank
               </AppText>
               <TouchableOpacity
-                onPress={() => {
-                  setSearchQuery("");
-                  setBankPickerVisible(false);
-                }}
+                onPress={() => setBankPickerVisible(false)}
+                style={[styles.circleIconButton, { backgroundColor: tileBg }]}
               >
-                <X size={22} color={theme.textMuted} />
+                <X size={18} color={theme.textMuted} />
               </TouchableOpacity>
             </View>
 
             <View
-              style={[
-                styles.searchBarContainer,
-                {
-                  backgroundColor: theme.background,
-                  borderColor: theme.border,
-                },
-              ]}
+              style={[styles.searchBarContainer, { backgroundColor: tileBg }]}
             >
               <Search
                 size={18}
@@ -660,87 +768,219 @@ export default function WithdrawScreen() {
                 placeholderTextColor={theme.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                autoCapitalize="none"
-                autoCorrect={false}
               />
-              {searchQuery ? (
-                <TouchableOpacity onPress={() => setSearchQuery("")}>
-                  <X size={18} color={theme.textMuted} />
-                </TouchableOpacity>
-              ) : null}
             </View>
 
             <ScrollView
-              style={{ flex: 1 }}
-              showsVerticalScrollIndicator={false}
+              style={{ flex: 1, paddingHorizontal: 16 }}
+              contentContainerStyle={{ paddingBottom: 24, paddingTop: 4 }}
               keyboardShouldPersistTaps="handled"
             >
-              {bankList.length === 0 ? (
-                <View style={{ padding: 40, alignItems: "center" }}>
-                  <ActivityIndicator size="large" color={theme.primary} />
-                  <AppText
-                    size={14}
-                    color={theme.textMuted}
-                    style={{ marginTop: 12 }}
-                  >
-                    Loading bank registers...
-                  </AppText>
-                </View>
-              ) : filteredBanks.length === 0 ? (
-                <View style={{ padding: 40, alignItems: "center" }}>
-                  <AlertCircle size={48} color={theme.textMuted} />
-                  <AppText
-                    size={14}
-                    color={theme.textMuted}
-                    style={{ marginTop: 12 }}
-                  >
-                    No banks match "{searchQuery}"
-                  </AppText>
-                </View>
-              ) : (
-                filteredBanks.map((item) => (
+              {filteredBanks.map((item) => {
+                const isSelected = item.code === selectedBankCode;
+                return (
                   <TouchableOpacity
                     key={item.id}
                     style={[
                       styles.bankItemRow,
-                      { borderBottomColor: theme.border },
+                      isSelected
+                        ? { backgroundColor: INK }
+                        : { backgroundColor: tileBg },
                     ]}
                     onPress={() => selectBankInstance(item.name, item.code)}
+                    activeOpacity={0.8}
                   >
                     <AppText
                       size={15}
-                      color={theme.text}
-                      weight={
-                        selectedBankCode === item.code ? "bold" : "regular"
-                      }
+                      weight={isSelected ? "bold" : "regular"}
+                      color={isSelected ? "#fff" : theme.text}
                     >
                       {item.name}
                     </AppText>
+                    {isSelected && (
+                      <View style={styles.bankCheckCircle}>
+                        <Check size={12} color={INK} />
+                      </View>
+                    )}
                   </TouchableOpacity>
-                ))
-              )}
+                );
+              })}
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* SUCCESS / ERROR MODAL */}
+      {/* Review & Confirm Withdrawal Sheet */}
+      <Modal
+        visible={confirmSheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setConfirmSheetVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            onPress={() =>
+              !isSubmittingWithdrawal && setConfirmSheetVisible(false)
+            }
+          />
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: heroCardBg, paddingHorizontal: 24 },
+            ]}
+          >
+            <View
+              style={[styles.modalKnob, { backgroundColor: theme.border }]}
+            />
+
+            <AppText
+              size={18}
+              weight="bold"
+              color={theme.text}
+              style={{ marginBottom: 4 }}
+            >
+              Review Withdrawal
+            </AppText>
+            <AppText
+              size={13}
+              color={theme.textMuted}
+              style={{ marginBottom: 20, lineHeight: 18 }}
+            >
+              Double-check the destination below. This can't be undone once
+              submitted.
+            </AppText>
+
+            <View style={[styles.reviewHeroBlock, { backgroundColor: tileBg }]}>
+              <AppText size={11} weight="bold" color={theme.textMuted}>
+                YOU WILL RECEIVE
+              </AppText>
+              <AppText
+                size={30}
+                weight="bold"
+                color={theme.text}
+                style={{ marginTop: 4 }}
+              >
+                ₦{netAmount.toLocaleString()}
+              </AppText>
+            </View>
+
+            <View
+              style={[styles.reviewDetailsBlock, { borderColor: theme.border }]}
+            >
+              <View style={styles.reviewRow}>
+                <AppText size={13} color={theme.textMuted}>
+                  Bank
+                </AppText>
+                <AppText size={13} weight="bold" color={theme.text}>
+                  {selectedBankName}
+                </AppText>
+              </View>
+              <View
+                style={[
+                  styles.reviewRow,
+                  { borderTopWidth: 1, borderTopColor: theme.border },
+                ]}
+              >
+                <AppText size={13} color={theme.textMuted}>
+                  Account Number
+                </AppText>
+                <AppText size={13} weight="bold" color={theme.text}>
+                  {accountNumber}
+                </AppText>
+              </View>
+              <View
+                style={[
+                  styles.reviewRow,
+                  { borderTopWidth: 1, borderTopColor: theme.border },
+                ]}
+              >
+                <AppText size={13} color={theme.textMuted}>
+                  Account Name
+                </AppText>
+                <AppText
+                  size={13}
+                  weight="bold"
+                  color={theme.text}
+                  numberOfLines={1}
+                >
+                  {accountName}
+                </AppText>
+              </View>
+              <View
+                style={[
+                  styles.reviewRow,
+                  { borderTopWidth: 1, borderTopColor: theme.border },
+                ]}
+              >
+                <AppText size={13} color={theme.textMuted}>
+                  Amount Requested
+                </AppText>
+                <AppText size={13} weight="bold" color={theme.text}>
+                  ₦{parsedAmount.toLocaleString()}
+                </AppText>
+              </View>
+              <View
+                style={[
+                  styles.reviewRow,
+                  { borderTopWidth: 1, borderTopColor: theme.border },
+                ]}
+              >
+                <AppText size={13} color={theme.textMuted}>
+                  Processing Fee ({WITHDRAWAL_FEE_PERCENTAGE}%)
+                </AppText>
+                <AppText size={13} weight="bold" color={theme.text}>
+                  ₦{fee.toLocaleString()}
+                </AppText>
+              </View>
+            </View>
+
+            <View style={styles.reviewButtonRow}>
+              <TouchableOpacity
+                style={[styles.reviewGoBackButton, { backgroundColor: tileBg }]}
+                onPress={() => setConfirmSheetVisible(false)}
+                disabled={isSubmittingWithdrawal}
+                activeOpacity={0.8}
+              >
+                <AppText size={15} weight="bold" color={theme.text}>
+                  Go Back
+                </AppText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.reviewConfirmButton, { backgroundColor: INK }]}
+                onPress={handleConfirmWithdrawal}
+                disabled={isSubmittingWithdrawal}
+                activeOpacity={0.85}
+              >
+                {isSubmittingWithdrawal ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <AppText size={15} weight="bold" color="#fff">
+                    Yes, Withdraw
+                  </AppText>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success / Error Modal */}
       <Modal
         visible={modalVisible}
-        transparent={true}
+        transparent
         animationType="slide"
         onRequestClose={handleModalClose}
       >
         <View style={styles.modalOverlay}>
           <TouchableOpacity
             style={styles.modalDismissArea}
-            activeOpacity={1}
             onPress={handleModalClose}
           />
           <View
             style={[
               styles.modalContent,
-              { backgroundColor: theme.surface, paddingHorizontal: 24 },
+              { backgroundColor: heroCardBg, paddingHorizontal: 24 },
             ]}
           >
             <View
@@ -766,11 +1006,7 @@ export default function WithdrawScreen() {
             <AppText
               size={14}
               color={theme.textMuted}
-              style={{
-                textAlign: "center",
-                lineHeight: 22,
-                marginBottom: 32,
-              }}
+              style={{ textAlign: "center", lineHeight: 22, marginBottom: 32 }}
             >
               {modalMessage}
             </AppText>
@@ -779,11 +1015,12 @@ export default function WithdrawScreen() {
               style={[
                 styles.modalButton,
                 {
-                  backgroundColor:
-                    modalType === "success" ? "#22c55e" : theme.primary,
+                  backgroundColor: modalType === "success" ? "#22c55e" : INK,
+                  marginBottom: 64,
                 },
               ]}
               onPress={handleModalClose}
+              activeOpacity={0.85}
             >
               <AppText size={16} weight="bold" color="#fff">
                 {modalType === "success" ? "Done" : "Got it"}
@@ -799,11 +1036,7 @@ export default function WithdrawScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   keyboardContainer: { flex: 1 },
-  headerGradient: {
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-
-  },
+  headerWrap: { paddingBottom: 4 },
   headerSafeArea: {
     paddingTop: Platform.OS === "ios" ? 10 : StatusBar.currentHeight || 10,
   },
@@ -814,7 +1047,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  backButton: { padding: 8 },
+  circleIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
   mainScrollView: { flex: 1 },
   scrollContentLayout: {
@@ -823,50 +1062,129 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === "ios" ? 40 : 24,
   },
 
-  mainBalanceCard: {
-    padding: 24,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    marginBottom: 24,
-    alignItems: "center",
+  infoBanner: {
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 20,
   },
-  balanceDivider: {
-    height: 1,
-    width: "100%",
-    marginVertical: 16,
-  },
-  subBalanceGrid: {
+  infoBannerHeader: {
     flexDirection: "row",
     alignItems: "center",
-    width: "100%",
+    marginBottom: 6,
   },
-  subBalanceItem: {
+  infoBannerText: {
+    lineHeight: 18,
+  },
+
+  reviewHeroBlock: {
+    borderRadius: 20,
+    padding: 18,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  reviewDetailsBlock: {
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  reviewRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  reviewButtonRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: Platform.OS === "ios" ? 34 : 64,
+  },
+  reviewGoBackButton: {
     flex: 1,
+    height: 54,
+    borderRadius: 999,
+    justifyContent: "center",
     alignItems: "center",
   },
-  verticalDivider: {
-    width: 1,
-    height: 30,
+  reviewConfirmButton: {
+    flex: 1,
+    height: 54,
+    borderRadius: 999,
+    justifyContent: "center",
+    alignItems: "center",
   },
+
+  balanceMasterCard: {
+    borderRadius: 28,
+    padding: 24,
+    marginBottom: 24,
+    alignItems: "center",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 2,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  infoCircleButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  allocationTrack: {
+    flexDirection: "row",
+    width: "100%",
+    height: 10,
+    borderRadius: 999,
+    overflow: "hidden",
+    marginBottom: 16,
+  },
+  allocationSegment: {
+    height: "100%",
+  },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    justifyContent: "center",
+  },
+  legendDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  subBalanceGrid: { flexDirection: "row", alignItems: "center", width: "100%" },
+  subBalanceItem: { flex: 1, alignItems: "center" },
+  verticalDivider: { width: 1, height: 30 },
 
   errorAlertBanner: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
     borderRadius: 12,
     padding: 14,
-    marginBottom: 20,
+    marginTop: 12,
+    width: "100%",
   },
 
   formCard: {
-    borderRadius: 24,
-    borderWidth: 1,
+    borderRadius: 28,
     padding: 20,
     marginBottom: 24,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 1,
   },
   label: { marginBottom: 6 },
   input: {
-    borderWidth: 1,
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -877,12 +1195,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  verifiedBadge: {
+    position: "absolute",
+    right: 14,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#22c55e",
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
   summaryCard: {
     padding: 20,
-    borderRadius: 20,
-    borderWidth: 1,
+    borderRadius: 24,
     marginBottom: 24,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 1,
   },
   summaryRow: {
     flexDirection: "row",
@@ -891,23 +1222,15 @@ const styles = StyleSheet.create({
   },
 
   withdrawButton: {
-    height: 56,
-    borderRadius: 20,
+    height: 58,
+    borderRadius: 999,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
-
   },
 
-  noteContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 28,
-    paddingHorizontal: 8,
-  },
-
-  /* Modal Styles - Unified */
+  /* Modals */
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
@@ -915,8 +1238,8 @@ const styles = StyleSheet.create({
   },
   modalDismissArea: { flex: 1 },
   modalContent: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     width: "100%",
   },
   modalKnob: {
@@ -938,26 +1261,37 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: 24,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 14,
+    borderRadius: 999,
+    paddingHorizontal: 16,
     height: 48,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   searchIcon: { marginRight: 10 },
   searchInputField: { flex: 1, fontSize: 15 },
 
   bankItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
+    paddingHorizontal: 18,
+    borderRadius: 18,
+    marginBottom: 8,
+  },
+  bankCheckCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   modalIconContainer: { marginTop: 20, marginBottom: 16, alignItems: "center" },
   modalButton: {
     width: "100%",
-    height: 52,
-    borderRadius: 16,
+    height: 54,
+    borderRadius: 999,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,

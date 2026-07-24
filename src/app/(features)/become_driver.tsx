@@ -43,6 +43,15 @@ import { getProfile } from "@/api/slices/user.slice";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // Strict 5MB Limit Gateway
 
+// Soft pastel palette matching the reference mood board's colored chips.
+const PASTELS = {
+  sky: { bg: "#DBEAFE", icon: "#2563EB" },
+  lavender: { bg: "#EDE9FE", icon: "#7C3AED" },
+  mint: { bg: "#D1FAE5", icon: "#059669" },
+  butter: { bg: "#FEF3C7", icon: "#D97706" },
+  rose: { bg: "#FFE1E6", icon: "#E11D48" },
+};
+
 export default function BecomeDriverScreen() {
   const { theme: colors, isDark } = useTheme();
   const router = useRouter();
@@ -68,6 +77,10 @@ export default function BecomeDriverScreen() {
 
   // Validation Error Feedback Tracker
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  const pageBg = isDark ? colors.background : "#f4f4f4";
+  const cardBg = isDark ? colors.surface : "#FFFFFF";
+  const tileBg = isDark ? colors.background : "#F4F4F1";
 
   // Initial Sync Strategy
   useEffect(() => {
@@ -243,10 +256,12 @@ export default function BecomeDriverScreen() {
   // Gate 1: Profile contains verified Driver status active flag
   if (profile?.isDriver) {
     return (
-      <View
-        style={[styles.centerContainer, { backgroundColor: colors.background }]}
-      >
-        <CheckCircle size={64} color="#22c55e" />
+      <View style={[styles.centerContainer, { backgroundColor: pageBg }]}>
+        <View
+          style={[styles.gateIconCircle, { backgroundColor: PASTELS.mint.bg }]}
+        >
+          <CheckCircle size={44} color={PASTELS.mint.icon} />
+        </View>
         <AppText
           size={22}
           weight="bold"
@@ -278,10 +293,12 @@ export default function BecomeDriverScreen() {
   // Gate 2: Account is Locked due to Suspension
   if (profile?.isDriverSuspended || application?.status === "suspended") {
     return (
-      <View
-        style={[styles.centerContainer, { backgroundColor: colors.background }]}
-      >
-        <XCircle size={64} color="#ef4444" />
+      <View style={[styles.centerContainer, { backgroundColor: pageBg }]}>
+        <View
+          style={[styles.gateIconCircle, { backgroundColor: PASTELS.rose.bg }]}
+        >
+          <XCircle size={44} color={PASTELS.rose.icon} />
+        </View>
         <AppText
           size={22}
           weight="bold"
@@ -298,16 +315,8 @@ export default function BecomeDriverScreen() {
           Your driving access features have been suspended indefinitely due to
           compliance policy updates.
         </AppText>
-        <View
-          style={[
-            styles.reasonBox,
-            {
-              backgroundColor: isDark ? "#2a1414" : "#fef2f2",
-              borderColor: "#fca5a5",
-            },
-          ]}
-        >
-          <AppText size={13} color="#ef4444" weight="bold">
+        <View style={[styles.reasonBox, { backgroundColor: PASTELS.rose.bg }]}>
+          <AppText size={13} color={PASTELS.rose.icon} weight="bold">
             Reason for Suspension:
           </AppText>
           <AppText size={14} color={colors.text} style={{ marginTop: 4 }}>
@@ -316,7 +325,7 @@ export default function BecomeDriverScreen() {
           </AppText>
         </View>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: colors.border }]}
+          style={[styles.actionButton, { backgroundColor: cardBg }]}
           onPress={() => router.back()}
         >
           <AppText size={16} weight="bold" color={colors.text}>
@@ -330,14 +339,15 @@ export default function BecomeDriverScreen() {
   // Gate 3: Application is Pending Review (Block re-uploads)
   if (profile?.isDriverPending || application?.status === "submitted") {
     return (
-      <View
-        style={[styles.centerContainer, { backgroundColor: colors.background }]}
-      >
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-          style={{ marginBottom: 16 }}
-        />
+      <View style={[styles.centerContainer, { backgroundColor: pageBg }]}>
+        <View
+          style={[
+            styles.gateIconCircle,
+            { backgroundColor: PASTELS.butter.bg },
+          ]}
+        >
+          <ActivityIndicator size="large" color={PASTELS.butter.icon} />
+        </View>
         <AppText
           size={22}
           weight="bold"
@@ -355,7 +365,7 @@ export default function BecomeDriverScreen() {
           during this administrative check.
         </AppText>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: colors.border }]}
+          style={[styles.actionButton, { backgroundColor: cardBg }]}
           onPress={() => router.back()}
         >
           <AppText size={16} weight="bold" color={colors.text}>
@@ -368,21 +378,16 @@ export default function BecomeDriverScreen() {
 
   // ─── WORKFLOW ENTRY FORM VIEW (Fresh Setup or Post-Rejection Updates) ───────
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: pageBg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      <SafeAreaView
-        style={[
-          styles.headerArea,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
+      <SafeAreaView style={styles.headerArea}>
         <View style={styles.headerRow}>
           <TouchableOpacity
-            style={[styles.circleButton, { borderColor: colors.border }]}
+            style={[styles.circleButton, { backgroundColor: cardBg }]}
             onPress={() => router.back()}
           >
-            <ArrowLeft size={22} color={colors.text} />
+            <ArrowLeft size={20} color={colors.text} />
           </TouchableOpacity>
           <AppText size={18} weight="bold" color={colors.text}>
             Become a Driver
@@ -403,32 +408,30 @@ export default function BecomeDriverScreen() {
         >
           {/* Permanent Verification Criteria Requirements Banner */}
           <View
-            style={[
-              styles.criteriaBanner,
-              {
-                backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-                borderColor: colors.border,
-              },
-            ]}
+            style={[styles.criteriaBanner, { backgroundColor: PASTELS.sky.bg }]}
           >
             <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-              <Info size={18} color={colors.primary} style={{ marginTop: 2 }} />
-              <View style={{ marginLeft: 10, flex: 1 }}>
-                <AppText size={14} weight="bold" color={colors.text}>
+              <View
+                style={[styles.bannerIconChip, { backgroundColor: "#FFFFFF" }]}
+              >
+                <Info size={16} color={PASTELS.sky.icon} />
+              </View>
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <AppText size={14} weight="bold" color="#1E3A8A">
                   Vehicle Eligibility Rules
                 </AppText>
                 <AppText
                   size={13}
-                  color={colors.textMuted}
+                  color="#1E40AF"
                   style={{ marginTop: 3, lineHeight: 18 }}
                 >
                   We only accept clean, good-looking cars from manufacturing
                   years{" "}
-                  <AppText weight="bold" color={colors.text}>
+                  <AppText weight="bold" color="#1E3A8A">
                     2010 models upwards
                   </AppText>
                   . Upload files under{" "}
-                  <AppText weight="bold" color={colors.text}>
+                  <AppText weight="bold" color="#1E3A8A">
                     5MB
                   </AppText>{" "}
                   per slot.
@@ -442,18 +445,15 @@ export default function BecomeDriverScreen() {
             <View
               style={[
                 styles.rejectedBanner,
-                {
-                  backgroundColor: isDark ? "#2d1a1a" : "#fff5f5",
-                  borderColor: "#f87171",
-                },
+                { backgroundColor: PASTELS.rose.bg },
               ]}
             >
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <AlertTriangle size={20} color="#ef4444" />
+                <AlertTriangle size={20} color={PASTELS.rose.icon} />
                 <AppText
                   size={15}
                   weight="bold"
-                  color="#ef4444"
+                  color={PASTELS.rose.icon}
                   style={{ marginLeft: 8 }}
                 >
                   Application Rejected
@@ -471,19 +471,14 @@ export default function BecomeDriverScreen() {
           )}
 
           <AppText
-            size={13}
+            size={12.5}
             weight="bold"
-            color={colors.primary}
+            color={colors.textMuted}
             style={styles.sectionHeader}
           >
             VEHICLE SPECIFICATIONS
           </AppText>
-          <View
-            style={[
-              styles.formBlock,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
+          <View style={[styles.formBlock, { backgroundColor: cardBg }]}>
             <AppText
               size={13}
               weight="medium"
@@ -495,11 +490,7 @@ export default function BecomeDriverScreen() {
             <TextInput
               style={[
                 styles.textInput,
-                {
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
+                { backgroundColor: tileBg, color: colors.text },
               ]}
               placeholder="e.g. Toyota Corolla"
               placeholderTextColor={colors.textMuted}
@@ -518,11 +509,7 @@ export default function BecomeDriverScreen() {
             <TextInput
               style={[
                 styles.textInput,
-                {
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
+                { backgroundColor: tileBg, color: colors.text },
               ]}
               placeholder="e.g. LAG-123AA"
               placeholderTextColor={colors.textMuted}
@@ -542,11 +529,7 @@ export default function BecomeDriverScreen() {
             <TextInput
               style={[
                 styles.textInput,
-                {
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
+                { backgroundColor: tileBg, color: colors.text },
               ]}
               placeholder="e.g. 2015"
               placeholderTextColor={colors.textMuted}
@@ -558,19 +541,14 @@ export default function BecomeDriverScreen() {
           </View>
 
           <AppText
-            size={13}
+            size={12.5}
             weight="bold"
-            color={colors.primary}
+            color={colors.textMuted}
             style={styles.sectionHeader}
           >
             LEGAL DOCUMENTATION
           </AppText>
-          <View
-            style={[
-              styles.formBlock,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
+          <View style={[styles.formBlock, { backgroundColor: cardBg }]}>
             <AppText
               size={13}
               weight="medium"
@@ -582,11 +560,7 @@ export default function BecomeDriverScreen() {
             <TextInput
               style={[
                 styles.textInput,
-                {
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
+                { backgroundColor: tileBg, color: colors.text },
               ]}
               placeholder="Enter license number"
               placeholderTextColor={colors.textMuted}
@@ -605,13 +579,7 @@ export default function BecomeDriverScreen() {
               Driver's License Card Image
             </AppText>
             <TouchableOpacity
-              style={[
-                styles.uploadBox,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                },
-              ]}
+              style={[styles.uploadBox, { backgroundColor: tileBg }]}
               onPress={pickDriversLicense}
             >
               {licenseImageUri ? (
@@ -629,12 +597,20 @@ export default function BecomeDriverScreen() {
                 </View>
               ) : (
                 <View style={{ alignItems: "center", padding: 20 }}>
-                  <FileText
-                    size={32}
-                    color={colors.textMuted}
-                    style={{ marginBottom: 8 }}
-                  />
-                  <AppText size={14} color={colors.text} weight="medium">
+                  <View
+                    style={[
+                      styles.uploadIconChip,
+                      { backgroundColor: PASTELS.lavender.bg },
+                    ]}
+                  >
+                    <FileText size={22} color={PASTELS.lavender.icon} />
+                  </View>
+                  <AppText
+                    size={14}
+                    color={colors.text}
+                    weight="bold"
+                    style={{ marginTop: 10 }}
+                  >
                     Upload License Photo
                   </AppText>
                   <AppText
@@ -650,45 +626,51 @@ export default function BecomeDriverScreen() {
           </View>
 
           <AppText
-            size={13}
+            size={12.5}
             weight="bold"
-            color={colors.primary}
+            color={colors.textMuted}
             style={styles.sectionHeader}
           >
             VEHICLE PHOTOS (MAX 4)
           </AppText>
-          <View
-            style={[
-              styles.formBlock,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
+          <View style={[styles.formBlock, { backgroundColor: cardBg }]}>
             <TouchableOpacity
               style={[
                 styles.uploadBox,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                  borderStyle: "dashed",
-                },
+                styles.dashedUploadBox,
+                { backgroundColor: tileBg, borderColor: colors.border },
               ]}
               onPress={pickCarImages}
               disabled={carImageUris.length >= 4}
             >
               <View style={{ alignItems: "center", padding: 16 }}>
-                <Car
-                  size={32}
-                  color={
-                    carImageUris.length >= 4 ? colors.border : colors.textMuted
-                  }
-                  style={{ marginBottom: 6 }}
-                />
+                <View
+                  style={[
+                    styles.uploadIconChip,
+                    {
+                      backgroundColor:
+                        carImageUris.length >= 4
+                          ? colors.border
+                          : PASTELS.mint.bg,
+                    },
+                  ]}
+                >
+                  <Car
+                    size={22}
+                    color={
+                      carImageUris.length >= 4
+                        ? colors.textMuted
+                        : PASTELS.mint.icon
+                    }
+                  />
+                </View>
                 <AppText
                   size={14}
                   color={
                     carImageUris.length >= 4 ? colors.textMuted : colors.text
                   }
-                  weight="medium"
+                  weight="bold"
+                  style={{ marginTop: 10 }}
                 >
                   {carImageUris.length >= 4
                     ? "Photo Limit Reached"
@@ -728,14 +710,11 @@ export default function BecomeDriverScreen() {
           {/* Global Error Output Elements */}
           {(validationError || driverError) && (
             <View
-              style={[
-                styles.errorCard,
-                { backgroundColor: isDark ? "#2a1414" : "#fef2f2" },
-              ]}
+              style={[styles.errorCard, { backgroundColor: PASTELS.rose.bg }]}
             >
               <AppText
                 size={13}
-                color="#ef4444"
+                color={PASTELS.rose.icon}
                 style={{ textAlign: "center" }}
               >
                 {validationError || driverError}
@@ -745,7 +724,10 @@ export default function BecomeDriverScreen() {
 
           {/* Submit Execution Component */}
           <TouchableOpacity
-            style={[styles.submitButton, { backgroundColor: colors.primary }]}
+            style={[
+              styles.submitButton,
+              { backgroundColor: colors.primary, marginBottom: 64 },
+            ]}
             onPress={handleSubmitApplication}
             disabled={isDriverLoading}
             activeOpacity={0.85}
@@ -767,12 +749,7 @@ export default function BecomeDriverScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerArea: {
-    borderBottomWidth: 1,
-    ...Platform.select({
-      android: {
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 4 : 12,
-      },
-    }),
+    paddingTop: Platform.OS === "ios" ? 0 : StatusBar.currentHeight || 0,
   },
   headerRow: {
     flexDirection: "row",
@@ -784,38 +761,51 @@ const styles = StyleSheet.create({
   circleButton: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
   },
   scrollContainer: { padding: 16, paddingBottom: 40 },
   criteriaBanner: {
-    borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 14,
     marginBottom: 22,
   },
-  sectionHeader: { marginBottom: 10, letterSpacing: 0.5 },
+  bannerIconChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sectionHeader: { marginBottom: 10, letterSpacing: 1, paddingHorizontal: 2 },
   formBlock: {
-    borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 16,
     marginBottom: 22,
   },
   fieldLabel: { marginBottom: 6 },
   textInput: {
-    borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
   },
   uploadBox: {
-    borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: "hidden",
     justifyContent: "center",
+  },
+  dashedUploadBox: {
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+  },
+  uploadIconChip: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
   },
   previewContainer: { width: "100%", height: 160 },
   fullImagePreview: { width: "100%", height: "100%" },
@@ -831,7 +821,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   thumbnailWrapper: { marginRight: 12, position: "relative" },
-  thumbnailImage: { width: 72, height: 72, borderRadius: 10 },
+  thumbnailImage: { width: 72, height: 72, borderRadius: 12 },
   removeBadge: {
     position: "absolute",
     top: -4,
@@ -844,13 +834,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   errorCard: {
-    padding: 12,
-    borderRadius: 12,
+    padding: 14,
+    borderRadius: 16,
     marginBottom: 16,
   },
   submitButton: {
-    height: 52,
-    borderRadius: 14,
+    height: 54,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -860,7 +850,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 24,
   },
-  stateTitle: { marginTop: 16, textAlign: "center" },
+  gateIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  stateTitle: { marginTop: 20, textAlign: "center" },
   stateSubtitle: {
     textAlign: "center",
     marginTop: 8,
@@ -869,22 +866,20 @@ const styles = StyleSheet.create({
   },
   reasonBox: {
     width: "100%",
-    borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 14,
     marginTop: 20,
   },
   actionButton: {
     width: "80%",
-    height: 48,
-    borderRadius: 12,
+    height: 50,
+    borderRadius: 999,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 28,
   },
   rejectedBanner: {
-    borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 14,
     marginBottom: 20,
   },

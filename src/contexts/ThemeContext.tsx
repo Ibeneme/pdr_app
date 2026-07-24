@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { useColorScheme } from "react-native";
 
 // 1. Define our palette with deep purple shades
-const palette = {
+export const palette = {
   purpleLight: "#F3E5F5", // Backgrounds / accents
   purpleMain: "#9C2583", // Primary buttons, branding
   purpleDark: "#4A148C", // Headings, dark backgrounds
@@ -24,6 +24,7 @@ export const theme = {
     text: palette.textLight,
     textMuted: "#666666",
     border: "#E0E0E0",
+    primaryDarks:  palette.purpleDark,
   },
   dark: {
     background: palette.black,
@@ -33,6 +34,7 @@ export const theme = {
     text: palette.textDark,
     textMuted: "#A0A0A0",
     border: "#333333",
+    primaryDarks: '4#A148C',
   },
 };
 

@@ -34,14 +34,12 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/api/store";
 import { getRequestById } from "@/api/slices/request.slice";
 
-// ---- Warm palette, matching the reference: cream canvas, burnt-orange
-// as the single bold accent, and a soft pastel tint per request type
-// (echoing the reference's Walking/Running/Meditation/Drink bar colors) ----
+// ---- Warm palette ----
 const CREAM = "#f4f4f4";
 const ACCENT = {
-  orange: "#8A2BE2", // Primary Purple
-  orangeDark: palette.purpleMain, // Indigo/Deep Purple
-  orangeSoft: "#E6E6FA", // Lavender/Soft Purple
+  orange: "#8A2BE2",
+  orangeDark: palette.purpleMain,
+  orangeSoft: "#E6E6FA",
 };
 
 const INK = ACCENT.orangeDark;
@@ -143,7 +141,6 @@ export default function RequestDetailsScreen() {
   const lowerType = useMemo(() => type?.toLowerCase().trim() || "", [type]);
   const isParcel = lowerType === "parcel";
 
-  // Dynamic context narrative for laymen explaining exactly what this screen represents
   const laymanPageDescription = useMemo(() => {
     switch (lowerType) {
       case "parcel":
@@ -182,9 +179,52 @@ export default function RequestDetailsScreen() {
     setTimeout(() => setCopiedVisible(false), 2500);
   };
 
+  // NEW: Check for paid negotiation
+  const getPaidNegotiation = () => {
+    if (!request?.negotiations || !Array.isArray(request.negotiations))
+      return null;
+    return request.negotiations.find((neg: any) => neg.isPaid === true);
+  };
+
   const handleActionPress = () => {
     if (!request) return;
 
+    const paidNeg = getPaidNegotiation();
+
+    // If there is a paid negotiation → route to specific details screen
+    if (paidNeg) {
+      const negotiatorServiceId = paidNeg.negotiatorService || paidNeg.service;
+
+      if (lowerType === "parcelrequest" || lowerType === "parcel") {
+        router.push({
+          pathname: "/(details)/details",
+          params: {
+            id: request._id || id,
+            type: "parcelrequest",
+            negotiatorService: negotiatorServiceId,
+          },
+        });
+      } else {
+        // Ride related
+        router.push({
+          pathname: "/(details)/ride",
+          params: {
+            id: request._id || id,
+            driverName: request.driver?.fullName,
+            driverPhone: request.driver?.phone,
+            pickup: request.pickupPoint || request.route?.pickupAddress,
+            dropoff: request.dropoffPoint || request.route?.deliveryAddress,
+            fare: request.estimatedFare,
+            time: request.departureTime,
+            seats: request.availableSeats,
+            negotiatorService: negotiatorServiceId,
+          },
+        });
+      }
+      return;
+    }
+
+    // Fallback to original behavior if no paid negotiation
     switch (lowerType) {
       case "parcel":
         router.push({
@@ -225,8 +265,6 @@ export default function RequestDetailsScreen() {
     request?.dropoffPoint ||
     "Unknown Destination";
 
-  // Screen canvas: warm cream in light mode (matching the reference), the
-  // app's own dark surface in dark mode — the accent orange stays constant.
   const canvasColor = isDark ? colors.background : CREAM;
 
   if (detailLoading && !request) {
@@ -281,8 +319,6 @@ export default function RequestDetailsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* LAYMAN INTRO CARD DYNAMIC BANNER — now the reference's warm
-            peach reminder-card treatment instead of a neutral tint */}
         <View
           style={[styles.pageIntroCard, { backgroundColor: ACCENT.orangeSoft }]}
         >
@@ -302,7 +338,7 @@ export default function RequestDetailsScreen() {
           </AppText>
         </View>
 
-        {/* Modern Timeline Card */}
+        {/* Hero Timeline Card */}
         <View
           style={[
             styles.heroCard,
@@ -423,7 +459,7 @@ export default function RequestDetailsScreen() {
           </View>
         )}
 
-        {/* Info Metrics Fields */}
+        {/* Trip Logistics */}
         <View
           style={[
             styles.card,
@@ -480,7 +516,7 @@ export default function RequestDetailsScreen() {
           />
         </View>
 
-        {/* Package Context Fields */}
+        {/* Package Specification */}
         {(request.item || request.properties) && (
           <View
             style={[
@@ -536,7 +572,7 @@ export default function RequestDetailsScreen() {
           </View>
         )}
 
-        {/* Stakeholders Profile Cards */}
+        {/* Assigned Personnel */}
         <View
           style={[
             styles.card,
@@ -578,7 +614,7 @@ export default function RequestDetailsScreen() {
           />
         </View>
 
-        {/* Bidding Negotiations Section */}
+        {/* Negotiations */}
         {request.negotiations?.length > 0 && (
           <View
             style={[
@@ -620,13 +656,19 @@ export default function RequestDetailsScreen() {
                   colors={colors}
                   onCopy={copyToClipboard}
                 />
+                <InfoRow
+                  label="Payment Status"
+                  value={neg.isPaid ? "✅ Paid" : "Pending"}
+                  colors={colors}
+                  onCopy={copyToClipboard}
+                />
               </View>
             ))}
           </View>
         )}
       </ScrollView>
 
-      {/* Floating Action Button with Action Descriptions */}
+      {/* Floating Action Button */}
       <View
         style={[
           styles.floatingAction,
@@ -638,7 +680,9 @@ export default function RequestDetailsScreen() {
       >
         <View style={styles.actionDescContainer}>
           <AppText size={11} color={colors.textMuted}>
-            {lowerType === "parcel"
+            {getPaidNegotiation()
+              ? "This request has been paid. Tap to view full confirmed details."
+              : lowerType === "parcel"
               ? "Tap below to scan, match and link this cargo request with active drivers nearby."
               : "Tap below to process transaction verification frameworks and check sub-details."}
           </AppText>
@@ -653,14 +697,16 @@ export default function RequestDetailsScreen() {
           activeOpacity={0.85}
         >
           <AppText size={15} weight="bold" color="#FFF">
-            {lowerType === "parcel"
+            {getPaidNegotiation()
+              ? "View Confirmed Details"
+              : lowerType === "parcel"
               ? "Find Active Drivers"
               : "View Full Details"}
           </AppText>
         </TouchableOpacity>
       </View>
 
-      {/* Modern Pop Toast Notification Overlay */}
+      {/* Copied Toast */}
       {copiedVisible && (
         <View
           style={[styles.modalOverlay, { backgroundColor: ACCENT.orangeDark }]}
@@ -685,9 +731,7 @@ const styles = StyleSheet.create({
   },
   loadingText: { marginTop: 12 },
   backBtn: { marginTop: 16, padding: 8 },
-  headerWrap: {
-    paddingBottom: 16,
-  },
+  headerWrap: { paddingBottom: 16 },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -705,19 +749,9 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 40 },
   scrollView: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 180 },
-  pageIntroCard: {
-    padding: 16,
-    borderRadius: 20,
-    marginBottom: 20,
-  },
-  introHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  introText: {
-    lineHeight: 18,
-  },
+  pageIntroCard: { padding: 16, borderRadius: 20, marginBottom: 20 },
+  introHeader: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  introText: { lineHeight: 18 },
   heroCard: {
     padding: 20,
     borderRadius: 20,
@@ -778,10 +812,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderTopWidth: 1,
   },
-  actionDescContainer: {
-    marginBottom: 10,
-    paddingHorizontal: 10,
-  },
+  actionDescContainer: { marginBottom: 10, paddingHorizontal: 10 },
   mainActionButton: {
     width: "100%",
     height: 54,

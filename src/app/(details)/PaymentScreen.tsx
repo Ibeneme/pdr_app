@@ -29,7 +29,7 @@ export default function PaymentScreen() {
 
   const { negotiationId, serviceType, amount, email } = useLocalSearchParams<{
     negotiationId: string;
-    serviceType: "offer_a_ride" | "deliver_a_parcel";
+    serviceType?: string;
     amount: string;
     email: string;
   }>();
@@ -42,7 +42,7 @@ export default function PaymentScreen() {
 
   // 1. Initialize Payment Payload
   useEffect(() => {
-    if (negotiationId && serviceType && email && amount) {
+    if (negotiationId && email && amount) {
       dispatch(
         initializePayment({
           negotiationId,
@@ -67,7 +67,6 @@ export default function PaymentScreen() {
       console.log("✅ [PAYMENT_SUCCESS] Redux state updated. Closing screen.");
       setIsVerifying(false);
       isProcessingVerification.current = false;
-    //   router.back();
     }
   }, [isPaymentSuccess]);
 
@@ -82,8 +81,7 @@ export default function PaymentScreen() {
     }
   }, [error, isVerifying]);
 
-  // --- THE FIX: JAVASCRIPT INJECTION BRIDGE ---
-  // This script runs inside the WebView and watches for Paystack events or success elements
+  // --- JAVASCRIPT INJECTION BRIDGE ---
   const injectedJavaScript = `
     (function() {
       // 1. Listen to inner window postMessages from Paystack frames
@@ -142,7 +140,7 @@ export default function PaymentScreen() {
       });
   };
 
-  // --- THE FIX: MESSAGE INTERCEPTOR ---
+  // MESSAGE INTERCEPTOR
   const handleMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -162,7 +160,6 @@ export default function PaymentScreen() {
         }
       }
     } catch (e) {
-      // Handle edge case where incoming message isn't a clean JSON object string
       if (event.nativeEvent.data === "PAYMENT_SUCCESSFUL" && activeReference) {
         executePaymentVerification(activeReference);
       }
@@ -174,7 +171,6 @@ export default function PaymentScreen() {
     const { url, title } = navState;
     console.log(`📡 [WEBVIEW_URL_CHANGED] URL: ${url} | Title: ${title}`);
 
-    // Early termination if user cancels out manually
     if (
       url.includes("cancel") ||
       url.includes("close") ||
@@ -185,7 +181,6 @@ export default function PaymentScreen() {
       return;
     }
 
-    // Standard URL string matcher checks
     const isSuccessUrl =
       url.includes("callback") ||
       url.includes("success") ||

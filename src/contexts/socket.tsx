@@ -21,13 +21,39 @@ interface Message {
   text: string;
   attachments?: string[];
   isRead: boolean;
+  isPriceSet?: boolean;
+  price?: number;
   readBy?: string[];
   timestamp: string | Date;
   createdAt?: string;
   updatedAt?: string;
+  type?: "text" | "status" | "price" | "system";
+  meta?: {
+    status?: string;
+    currentLocation?: string;
+    requestId?: string;
+  };
 }
 
 const SocketContext = createContext<any>(null);
+
+// Same ALL CAPS mapping used in ChatScreen — kept here too so the
+// OPTIMISTIC local message (created before the server round trip
+// completes) reads identically to the eventual server-broadcast one.
+// If ChatScreen's copy of this ever changes, update both.
+function getStatusAnnouncementText(status?: string): string | null {
+  if (!status) return null;
+  const STATUS_ANNOUNCEMENTS: Record<string, string> = {
+    assigned: "RIDE ASSIGNED",
+    in_progress: "THIS RIDE IS NOW IN PROGRESS",
+    completed: "RIDE MARKED AS COMPLETED",
+    confirmed: "RIDE CONFIRMED",
+  };
+  return (
+    STATUS_ANNOUNCEMENTS[status] ||
+    `STATUS UPDATED: ${status.replace(/_/g, " ").toUpperCase()}`
+  );
+}
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -35,11 +61,14 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [typingUsers, setTypingUsers] = useState<any[]>([]);
+  const [agreedPrices, setAgreedPrices] = useState<{ [key: string]: number }>(
+    {}
+  ); // Track agreed price for the room
 
-  const negotiationIdRef = useRef<string | null>(null); // Keep track of current room
+  const negotiationIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    console.log("🔌 Initializing socket connection to:", baseURL);
+    console.log("🔌 [socket] Initializing connection to:", baseURL);
 
     const newSocket = io(baseURL, {
       reconnection: true,
@@ -47,52 +76,127 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     newSocket.on("connect", () => {
-      console.log("✅ Socket connected. ID:", newSocket.id);
+      console.log("✅ [socket] Connected. ID:", newSocket.id);
       setIsConnected(true);
     });
 
     newSocket.on("disconnect", (reason) => {
-      console.log("❌ Socket disconnected. Reason:", reason);
+      console.log("❌ [socket] Disconnected. Reason:", reason);
       setIsConnected(false);
+    });
+
+    newSocket.on("connect_error", (err) => {
+      console.log("🔴 [socket] connect_error:", err?.message || err);
+    });
+
+    // Generic server-side error passthrough
+    newSocket.on("error", (payload) => {
+      console.log("🔴 [socket] RECEIVED 'error':", payload);
     });
 
     // Room joined
     newSocket.on("room-joined", ({ users, messages: initialMessages }) => {
-      console.log("📥 [Client] Event 'room-joined' received:");
-      console.log("   - Users Array Length:", users?.length);
-      console.log("   - Messages Array Length:", initialMessages?.length);
-      
-      if (initialMessages && initialMessages.length > 0) {
-          console.log("   - First Message Object:", initialMessages[0]);
-      } else {
-          console.log("   - Warning: No messages received in 'room-joined' payload.");
-      }
-  
+      console.log("📥 [socket] RECEIVED 'room-joined':", {
+        userCount: users?.length,
+        messageCount: initialMessages?.length,
+      });
       setUsers(users || []);
       setMessages(initialMessages || []);
-  });
+    });
 
     // New user joined
     newSocket.on("user-joined", ({ userPayload }) => {
-      console.log("📥 Event [user-joined] received:", userPayload);
+      console.log("📥 [socket] RECEIVED 'user-joined':", userPayload);
       setUsers((prev) => [
         ...prev.filter((u) => u.id !== userPayload.id),
         userPayload,
       ]);
     });
 
-    // Receive new message
+    // Receive new message (also carries "status" type messages from
+    // pr-update-request-progress on the server).
+    //
+    // IMPORTANT — dedupe against optimistic local messages: when we
+    // update a status/location ourselves, addLocalStatusMessage() below
+    // pushes a temporary message (id starting with "local_") into state
+    // IMMEDIATELY, before the server round trip completes. When the real
+    // server-broadcast version of that same update arrives here, we swap
+    // it into the SAME slot instead of appending a second copy — so the
+    // person never sees the automated message twice, but also never has
+    // to wait for the network to see it once.
     newSocket.on("pr-chat-message", (msg: Message) => {
-      console.log("📥 Event [pr-chat-message] received:", msg);
-      setMessages((prev) => [...prev, msg]);
+      console.log("📥 [socket] RECEIVED 'pr-chat-message':", {
+        id: msg.id,
+        type: msg.type,
+        text: msg.text,
+        meta: msg.meta,
+      });
+
+      setMessages((prev) => {
+        if (msg.type === "status") {
+          const optimisticIndex = prev.findIndex(
+            (m) =>
+              typeof m.id === "string" &&
+              m.id.startsWith("local_") &&
+              m.type === "status" &&
+              m.meta?.requestId === msg.meta?.requestId &&
+              (m.meta?.status || undefined) ===
+                (msg.meta?.status || undefined) &&
+              (m.meta?.currentLocation || undefined) ===
+                (msg.meta?.currentLocation || undefined)
+          );
+          if (optimisticIndex !== -1) {
+            console.log(
+              "🔁 [socket] Reconciling optimistic status message with server version"
+            );
+            const updated = [...prev];
+            updated[optimisticIndex] = msg;
+            return updated;
+          }
+        }
+        return [...prev, msg];
+      });
     });
 
+    // Price Agreed Listener
+    newSocket.on(
+      "price-agreed",
+      ({ messageId, negotiationId, price, updatedNegotiation }) => {
+        console.log("📥 [socket] RECEIVED 'price-agreed':", {
+          messageId,
+          negotiationId,
+          price,
+        });
+        setAgreedPrices((prev) => ({
+          ...prev,
+          [negotiationId]: price,
+        }));
+      }
+    );
+
+    // Lightweight status/location event fired alongside the inline chat
+    // message. Not required for the chat feed itself (that comes via
+    // 'pr-chat-message'), but useful if any screen wants status without
+    // the chat context.
+    newSocket.on(
+      "request-progress-updated",
+      ({ requestId, status, currentLocation, message }) => {
+        console.log("📥 [socket] RECEIVED 'request-progress-updated':", {
+          requestId,
+          status,
+          currentLocation,
+          hasMessage: !!message,
+        });
+      }
+    );
+
     // Typing indicator
-    newSocket.on("user-typing", ({ userPayload, isTyping }) => {
-      console.log("📥 Event [user-typing] received:", {
-        userPayload,
+    newSocket.on("user_typing", ({ userPayload, isTyping, name }) => {
+      console.log("📥 [socket] RECEIVED 'user_typing':", {
+        name: userPayload?.id || name,
         isTyping,
       });
+      if (!userPayload) return; // server sends {roomUuid, name, isTyping} shape too — guard
       setTypingUsers((prev) =>
         isTyping
           ? [...prev.filter((u) => u.id !== userPayload.id), userPayload]
@@ -103,106 +207,215 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     setSocket(newSocket);
 
     return () => {
-      console.log("🧹 Cleaning up SocketProvider: Disconnecting socket...");
+      console.log("🧹 [socket] Cleaning up: disconnecting socket...");
       newSocket.disconnect();
     };
   }, []);
 
   const joinChat = (negotiationId: string, userPayload: any) => {
-    console.log("📤 Action [joinChat] called:", { negotiationId, userPayload });
-
     if (!negotiationId || !userPayload) {
-      console.warn("⚠️ joinChat aborted: Missing negotiationId or userPayload");
+      console.warn(
+        "⚠️ [socket] joinChat aborted: Missing negotiationId or userPayload"
+      );
       return;
     }
 
     negotiationIdRef.current = negotiationId;
-
-    if (!socket) {
-      console.warn("⚠️ joinChat: Socket is not initialized yet!");
-    }
-
-    socket?.emit("join-pr-chat", {
-      negotiationId,
-      userPayload,
-    });
-    console.log("🚀 Emitted [join-pr-chat]");
+    const payload = { negotiationId, userPayload };
+    console.log("📤 [socket] SENDING 'join-pr-chat':", payload);
+    socket?.emit("join-pr-chat", payload);
   };
 
-  // Inside SocketProvider.tsx
   const sendMessage = (
     text: string,
     currentUser: any,
-    negotiation: any, // Accepts the full object
-    attachments: string[] = []
+    negotiation: any,
+    attachments: string[] = [],
+    price: number = 0,
+    isPriceSet: boolean = false
   ) => {
-    // Extract the ID from the object safely
-    const negotiationId = negotiation?._id || negotiation?.id;
+    const negotiationId =
+      typeof negotiation === "string"
+        ? negotiation
+        : negotiation?._id || negotiation?.id;
 
-    if (!text.trim() || !currentUser || !negotiationId) {
-      console.warn("⚠️ sendMessage aborted: Missing data", {
-        hasText: !!text.trim(),
-        hasUser: !!currentUser,
-        hasNegotiationId: !!negotiationId,
-      });
-      return;
-    }
-
-    if (!socket) {
-      console.warn("⚠️ sendMessage aborted: Socket not connected");
-      return;
-    }
-
-    socket.emit("pr-chat-message", {
-      negotiation: negotiationId, // Send the ID derived from the object
-      text: text.trim(),
-      attachments,
-      senderId: currentUser._id || currentUser.id,
-    });
-
-    console.log(
-      `🚀 Emitted [pr-chat-message] for negotiation: ${negotiationId}`
-    );
-  };
-  const sendTyping = (isTyping: boolean) => {
-    console.log("📤 Action [sendTyping] called:", { isTyping });
-
-    if (!socket || !negotiationIdRef.current) {
+    if ((!text.trim() && !isPriceSet) || !currentUser || !negotiationId) {
       console.warn(
-        "⚠️ sendTyping aborted: Socket not initialized or not in a room"
+        "⚠️ [socket] sendMessage aborted — missing text/user/negotiationId",
+        {
+          hasText: !!text.trim(),
+          isPriceSet,
+          hasUser: !!currentUser,
+          negotiationId,
+        }
       );
       return;
     }
 
-    socket.emit("pr-typing", {
-      negotiationId: negotiationIdRef.current,
-      isTyping,
-    });
-    console.log("🚀 Emitted [pr-typing]:", {
-      negotiationId: negotiationIdRef.current,
-      isTyping,
-    });
+    const clientId = `client_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
+    const payload = {
+      negotiation: negotiationId,
+      text: text ? text.trim() : "",
+      attachments,
+      senderId: currentUser._id || currentUser.id,
+      price,
+      isPriceSet,
+      clientId,
+    };
+
+    console.log("📤 [socket] SENDING 'pr-chat-message':", payload);
+    socket?.emit("pr-chat-message", payload);
   };
 
-  const leaveChat = () => {
+  const agreeToPrice = (
+    messageId: string,
+    negotiationId: string,
+    price: number
+  ) => {
+    if (!socket || !negotiationId) {
+      console.warn(
+        "⚠️ [socket] agreeToPrice aborted — no socket or negotiationId"
+      );
+      return;
+    }
+
+    // Optimistic UI update
+    setAgreedPrices((prev) => ({ ...prev, [negotiationId]: price }));
+
+    const payload = { messageId, negotiationId, price };
+    console.log("📤 [socket] SENDING 'pr-agree-price':", payload);
+    socket.emit("pr-agree-price", payload);
+  };
+
+  // NEW — pushes a temporary, LOCAL-ONLY status/location message into
+  // `messages` the instant a status or location update happens, before
+  // any network round trip. This is what guarantees "an automated
+  // message shows up when I update the status" is never dependent on
+  // server timing. Its id is prefixed "local_" so the 'pr-chat-message'
+  // listener above can find and replace it (not duplicate it) once the
+  // real, DB-persisted version comes back from the server.
+  const addLocalStatusMessage = (
+    requestId: string,
+    negotiationId: string,
+    status?: string,
+    currentLocation?: string,
+    senderId?: string
+  ) => {
+    const statusAnnouncement = getStatusAnnouncementText(status);
+    let text: string;
+    if (statusAnnouncement) {
+      text = currentLocation
+        ? `${statusAnnouncement} • LOCATION: ${currentLocation.toUpperCase()}`
+        : statusAnnouncement;
+    } else if (currentLocation) {
+      text = `LOCATION UPDATED: ${currentLocation.toUpperCase()}`;
+    } else {
+      console.warn(
+        "⚠️ [socket] addLocalStatusMessage called with neither status nor currentLocation — skipping"
+      );
+      return;
+    }
+
+    const localMessage: Message = {
+      id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      negotiation: negotiationId,
+      sender: { id: senderId, name: "You" },
+      text,
+      type: "status",
+      meta: { status, currentLocation, requestId },
+      isRead: false,
+      readBy: [],
+      timestamp: new Date().toISOString(),
+    };
+
     console.log(
-      "📤 Action [leaveChat] called. Current room:",
-      negotiationIdRef.current
+      "⚡ [socket] Adding OPTIMISTIC local status message (instant, pre-network):",
+      localMessage
+    );
+    setMessages((prev) => [...prev, localMessage]);
+  };
+
+  // Emits "pr-update-request-progress", matching the server handler
+  // exactly (requestId, negotiationId, status, currentLocation,
+  // senderId). Also fires the optimistic local message above FIRST, so
+  // the chat feed and header badge update instantly regardless of
+  // network latency — the server-broadcast version reconciles into the
+  // same slot moments later.
+  const updateRequestStatus = (
+    requestId: string,
+    negotiationId: string,
+    status?: string,
+    currentLocation?: string,
+    senderId?: string
+  ) => {
+    if (!socket || !requestId) {
+      console.warn(
+        "⚠️ [socket] updateRequestStatus aborted — missing socket or requestId",
+        { requestId, negotiationId, status, currentLocation }
+      );
+      return;
+    }
+
+    // Instant, local, automated message — this is the fix: status
+    // updates now behave exactly like location updates always did.
+    addLocalStatusMessage(
+      requestId,
+      negotiationId,
+      status,
+      currentLocation,
+      senderId
     );
 
-    if (socket && negotiationIdRef.current) {
-      socket.emit("leave-pr-chat", { negotiationId: negotiationIdRef.current });
-      console.log("🚀 Emitted [leave-pr-chat]");
+    const payload = {
+      requestId,
+      negotiationId,
+      status,
+      currentLocation,
+      senderId,
+    };
 
-      console.log("♻️ Resetting chat state fields...");
+    console.log("📤 [socket] SENDING 'pr-update-request-progress':", payload);
+    socket.emit("pr-update-request-progress", payload);
+  };
+
+  // Was emitting "pr-typing", but the server only listens for "typing" /
+  // "stop_typing". Split so it actually reaches the server's handlers.
+  const sendTyping = (isTyping: boolean) => {
+    if (!socket || !negotiationIdRef.current) return;
+
+    const payload = {
+      uuid: negotiationIdRef.current,
+      isTyping,
+    };
+
+    if (isTyping) {
+      console.log("📤 [socket] SENDING 'typing':", payload);
+      socket.emit("typing", payload);
+    } else {
+      console.log("📤 [socket] SENDING 'stop_typing':", payload);
+      socket.emit("stop_typing", payload);
+    }
+  };
+
+  // NOTE — server has no "leave-pr-chat" handler. socket.io rooms are
+  // cleaned up automatically on disconnect, so this just resets local
+  // state. Left the emit in (harmless / forward-compatible) but logged
+  // clearly so it's not mistaken for something the server acts on.
+  const leaveChat = () => {
+    if (socket && negotiationIdRef.current) {
+      const payload = { negotiationId: negotiationIdRef.current };
+      console.log(
+        "📤 [socket] SENDING 'leave-pr-chat' (note: no server handler currently):",
+        payload
+      );
+      socket.emit("leave-pr-chat", payload);
       setMessages([]);
       setUsers([]);
       setTypingUsers([]);
       negotiationIdRef.current = null;
-    } else {
-      console.warn(
-        "⚠️ leaveChat skipped: Socket missing or not currently in a room"
-      );
     }
   };
 
@@ -213,8 +426,11 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         isConnected,
         joinChat,
         sendMessage,
+        agreeToPrice,
+        agreedPrices,
         sendTyping,
         leaveChat,
+        updateRequestStatus, // now fires an INSTANT local message + the real socket emit
         messages,
         users,
         typingUsers,
