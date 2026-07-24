@@ -1,6 +1,6 @@
 // src/api/axiosInstance.ts
 import axios from 'axios';
-import { getAuthToken } from './secureStore';
+import { getAuthToken, removeAuthToken } from './secureStore';
 
 // Base URL - No trailing slash!
 export const baseURL = 'https://kindred-server.onrender.com';
@@ -61,8 +61,6 @@ axiosInstance.interceptors.response.use(
 
             console.warn("🔄 401 detected - Token failed. Clearing session...");
 
-            // Import dynamically to avoid circular dependency
-            const { removeAuthToken } = await import('./secureStore');
             await removeAuthToken();
 
             return Promise.reject(error);
