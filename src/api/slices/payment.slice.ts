@@ -164,16 +164,16 @@ const paymentSlice = createSlice({
                     state.error = null;
                 }
             )
-            .addMatcher(
-                (action) => action.type.endsWith("/rejected"),
-                (state, action: PayloadAction<string | undefined>) => {
-                    state.isLoading = false;
-                    state.isPaymentSuccess = false;
-                    state.isEscrowReleaseSuccess = false;
-                    state.error = action.payload || "Payment handling system error event";
-                    console.error(`🚨 [SLICE_REJECTED] Payment exception caught: ${state.error}`);
-                }
-            );
+            // .addMatcher(
+            //     (action) => action.type.endsWith("/rejected"),
+            //     (state, action: PayloadAction<string | undefined>) => {
+            //         state.isLoading = false;
+            //         state.isPaymentSuccess = false;
+            //         state.isEscrowReleaseSuccess = false;
+            //         state.error = action.payload || "Payment handling system error event";
+            //         console.error(`🚨 [SLICE_REJECTED] Payment exception caught: ${state.error}`);
+            //     }
+            // );
     },
 });
 

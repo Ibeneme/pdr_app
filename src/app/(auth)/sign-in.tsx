@@ -115,7 +115,7 @@ export default function SignInScreen() {
     console.log(
       `[SIGNIN SUBMIT] Attempting credentials authorization handshakes for: ${email}`
     );
-
+  
     if (!email || !password) {
       triggerAlertModal(
         "Missing Credentials",
@@ -123,44 +123,51 @@ export default function SignInScreen() {
       );
       return;
     }
-
+  
     setLoading(true);
     try {
-      const result = await dispatch(loginUser({ email, password })).unwrap();
+      const result = await dispatch(
+        loginUser({ email: email.toLowerCase().trim(), password })
+      ).unwrap();
+  
       console.log(
         "[SIGNIN SUCCESS] Authentication handshake completely verified.",
         result
       );
-
-      if (result && result.token) {
+  
+      // Only navigate when we actually have a token — never fall through.
+      if (result?.token) {
         await saveAuthToken(result.token);
         console.log("[SIGNIN SUCCESS] Token stored successfully");
-
+  
         if (result.user) {
           await saveUser(result.user);
-          console.log(
-            "[SIGNIN SUCCESS] User profile saved to secure storage:",
-            {
-              id: result.user.id,
-              fullName: result.user.fullName,
-              email: result.user.email,
-            }
-          );
+          console.log("[SIGNIN SUCCESS] User profile saved to secure storage:", {
+            id: result.user.id,
+            fullName: result.user.fullName,
+            email: result.user.email,
+          });
         } else {
           console.warn("[SIGNIN WARNING] User data missing from response");
         }
+  
+        router.replace("/(tabs)/home");
       } else {
+        // Token missing from an otherwise "successful" response — treat as failure.
         console.error("[SIGNIN ERROR] Token missing from server response.");
+        triggerAlertModal(
+          "Sign In Failed",
+          "We couldn't complete your sign in. Please try again."
+        );
+        // No navigation — email/password stay populated, user stays on this screen.
       }
-
-      router.replace("/(tabs)/home");
     } catch (err: any) {
       console.warn(
         `[SIGNIN REJECTED] Remote backend endpoint parsing failure: ${
           err?.message || err
         }`
       );
-
+  
       if (
         err === "Account not verified. A new OTP has been sent to your email."
       ) {
@@ -172,7 +179,13 @@ export default function SignInScreen() {
           params: { email, flow: "login" },
         });
       } else {
-        triggerAlertModal("Authentication Failed", err);
+        // Invalid credentials, network error, etc. — stay on the sign-in page.
+        // email/password state is untouched, so the user can just retry.
+        const message =
+          typeof err === "string"
+            ? err
+            : err?.message || "Something went wrong. Please try again.";
+        triggerAlertModal("Authentication Failed", message);
       }
     } finally {
       setLoading(false);

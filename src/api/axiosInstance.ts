@@ -1,8 +1,8 @@
-// src/api/axiosInstance.ts
+
+
 import axios from 'axios';
 import { getAuthToken, removeAuthToken } from './secureStore';
 
-// Base URL - No trailing slash!
 export const baseURL = 'https://kindred-server.onrender.com';
 
 //export const baseURL = 'http://localhost:5005';

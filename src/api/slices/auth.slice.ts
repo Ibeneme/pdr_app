@@ -54,14 +54,18 @@ export const loginUser = createAsyncThunk<CommonResponse, any, { rejectValue: st
     "auth/loginUser",
     async (credentials, { rejectWithValue }) => {
         try {
-            console.log("[AUTH SLICE] Logging in user with credentials:", credentials);
-            const response = await axiosInstance.post<CommonResponse>("/padiman_route/auth/login", credentials);
+            const payload = {
+                ...credentials,
+                email: credentials.email?.toLowerCase().trim(),
+            };
+            console.log("[AUTH SLICE] Logging in user with credentials:", payload);
+            const response = await axiosInstance.post<CommonResponse>("/padiman_route/auth/login", payload);
             console.log("[AUTH SLICE] Login response payload received:", response.data);
             return response.data;
         } catch (error: any) {
             const errMsg = error.response?.data?.message || "Invalid credentials";
             console.error("[AUTH SLICE ERROR] Login failed:", errMsg);
-            return rejectWithValue(errMsg);
+            return rejectWithValue(errMsg); // was: return errMsg
         }
     }
 );
